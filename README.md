@@ -22,7 +22,7 @@ Ground segment software commonly presents one of two constraints:
 
 MDP occupies the space between: a composable Python library implementing standard telemetry data structures and a clean ETL contract. It can be embedded in any Python environment, executed headlessly in CI, or extended via typed plugins — with no proprietary runtime dependencies.
 
-This library is part of Northflow's open evidence infrastructure. It demonstrates the data-layer patterns used in the [Hypothesis Generation Engine (HGE)](https://northflow.no) for structured, reproducible processing of large-scale observational data.
+This library is part of Northflow's open evidence infrastructure. It demonstrates the data-layer patterns used in the [Hypothesis Generation Engine (HGE)](https://northflow.no/research/hge) for structured, reproducible processing of large-scale observational data.
 
 ```
 Raw binary (CCSDS) ──► BinaryExtractor
@@ -359,7 +359,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, coding standards, 
 
 ## About Northflow Technologies
 
-[Northflow Technologies](https://northflow.no) builds institutional-grade evidence infrastructure for climate, space, and critical systems. Our core asset is the **Hypothesis Generation Engine (HGE)** — a structured system for machine-driven hypothesis search, evaluation, and verification under uncertainty.
+[Northflow Technologies](https://northflow.no) builds institutional-grade evidence infrastructure for climate, space, and critical systems. Our core asset is the [**Hypothesis Generation Engine (HGE)**](https://northflow.no/research/hge) — a structured system for machine-driven hypothesis search, evaluation, and verification under uncertainty.
 
 Built in Norway. Validated on Gaia DR3 astronomical data. Adapting to ESA Sentinel Earth Observation.
 
