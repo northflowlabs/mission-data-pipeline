@@ -73,8 +73,7 @@ class CCSDSPrimaryHeader(BaseModel):
     def to_bytes(self) -> bytes:
         """Serialise back to 6 bytes."""
         word0 = (
-            (self.version << 13) | (self.type_flag << 12)
-            | (self.sec_hdr_flag << 11) | self.apid
+            (self.version << 13) | (self.type_flag << 12) | (self.sec_hdr_flag << 11) | self.apid
         )
         word1 = (self.seq_flags << 14) | self.seq_count
         return struct.pack(">HHH", word0, word1, self.data_length)
@@ -154,7 +153,7 @@ class TelemetryPacket(BaseModel):
         header = CCSDSPrimaryHeader.from_bytes(raw[:6])
         data_field = raw[6 : 6 + header.packet_data_length]
         sec_hdr = data_field[:sec_hdr_length] if header.sec_hdr_flag and sec_hdr_length > 0 else b""
-        user_data = data_field[len(sec_hdr):]
+        user_data = data_field[len(sec_hdr) :]
         return cls(
             header=header,
             secondary_header=sec_hdr,

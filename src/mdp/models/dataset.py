@@ -42,9 +42,7 @@ class TelemetryDataset:
 
     def add_parameter(self, param: EngineeringParameter) -> None:
         if param.name not in self.parameters:
-            self.parameters[param.name] = ParameterRecord(
-                name=param.name, unit=param.unit
-            )
+            self.parameters[param.name] = ParameterRecord(name=param.name, unit=param.unit)
         record = self.parameters[param.name]
         object.__setattr__(
             record,

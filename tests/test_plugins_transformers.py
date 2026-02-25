@@ -33,6 +33,7 @@ def _dataset_with_packets(*apids: int) -> TelemetryDataset:
     for apid in apids:
         raw = make_raw_packet(apid=apid, user_data=struct.pack(">HHf", 1000, 200, 3.14))
         from mdp.models.packet import TelemetryPacket
+
         p = TelemetryPacket.from_bytes(raw, source_time_tai=0.0)
         ds.add_packet(p)
     return ds
@@ -41,11 +42,17 @@ def _dataset_with_packets(*apids: int) -> TelemetryDataset:
 def _dataset_with_param(name: str, values: list[float]) -> TelemetryDataset:
     ds = TelemetryDataset()
     for i, v in enumerate(values):
-        ds.add_parameter(EngineeringParameter(
-            name=name, apid=0x100, seq_count=i,
-            sample_time_tai=float(i), raw_value=v, eng_value=v,
-            unit="raw",
-        ))
+        ds.add_parameter(
+            EngineeringParameter(
+                name=name,
+                apid=0x100,
+                seq_count=i,
+                sample_time_tai=float(i),
+                raw_value=v,
+                eng_value=v,
+                unit="raw",
+            )
+        )
     return ds
 
 
@@ -70,6 +77,7 @@ class TestDecomTransformer:
 
         raw = make_raw_packet(apid=0x100, user_data=struct.pack(">H", 1024) + b"\x00\x00")
         from mdp.models.packet import TelemetryPacket
+
         p = TelemetryPacket.from_bytes(raw, source_time_tai=1.0)
         ds = TelemetryDataset()
         ds.add_packet(p)
@@ -114,6 +122,7 @@ class TestDecomTransformer:
         expected = 298.15
         raw = make_raw_packet(apid=0x200, user_data=struct.pack(">f", expected))
         from mdp.models.packet import TelemetryPacket
+
         p = TelemetryPacket.from_bytes(raw, source_time_tai=0.0)
         ds = TelemetryDataset()
         ds.add_packet(p)

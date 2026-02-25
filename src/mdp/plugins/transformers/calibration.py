@@ -56,7 +56,7 @@ class CalibrationEntry(BaseModel):
                 return raw
             result = 0.0
             for power, coeff in enumerate(self.coefficients):
-                result += coeff * (raw ** power)
+                result += coeff * (raw**power)
             return result
 
         if self.method == CalibrationMethod.TABLE:

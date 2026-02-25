@@ -93,6 +93,7 @@ class TestEventHook:
 
     def test_unregister(self) -> None:
         calls = []
+
         def handler(v: int) -> None:
             calls.append(v)
 

@@ -66,9 +66,7 @@ class CsvTelemetryExtractor(Extractor[CsvExtractorConfig]):
         if missing:
             raise ValueError(f"CSV is missing required columns: {missing}")
 
-        param_cols = cfg.parameter_columns or [
-            c for c in chunk.columns if c not in required
-        ]
+        param_cols = cfg.parameter_columns or [c for c in chunk.columns if c not in required]
 
         dataset = TelemetryDataset(
             metadata={

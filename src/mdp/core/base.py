@@ -106,19 +106,25 @@ class Extractor(PipelineStage[ConfigT]):
             self.setup()
             for ds in self.extract():
                 elapsed = time.perf_counter() - t0
-                yield ds, StageResult(
-                    stage_name=self.name,
-                    status=StageStatus.SUCCESS,
-                    elapsed_s=elapsed,
-                    records_out=len(ds),
+                yield (
+                    ds,
+                    StageResult(
+                        stage_name=self.name,
+                        status=StageStatus.SUCCESS,
+                        elapsed_s=elapsed,
+                        records_out=len(ds),
+                    ),
                 )
         except Exception as exc:
             elapsed = time.perf_counter() - t0
-            yield TelemetryDataset(), StageResult(
-                stage_name=self.name,
-                status=StageStatus.FAILED,
-                elapsed_s=elapsed,
-                error=exc,
+            yield (
+                TelemetryDataset(),
+                StageResult(
+                    stage_name=self.name,
+                    status=StageStatus.FAILED,
+                    elapsed_s=elapsed,
+                    error=exc,
+                ),
             )
             raise
         finally:

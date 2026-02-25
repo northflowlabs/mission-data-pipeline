@@ -53,7 +53,7 @@ class TestTelemetryPacket:
         packet = TelemetryPacket.from_bytes(raw_packet_bytes)
         assert packet.apid == 0x100
         assert packet.seq_count == 42
-        assert packet.user_data == b"\xDE\xAD\xBE\xEF"
+        assert packet.user_data == b"\xde\xad\xbe\xef"
 
     def test_from_bytes_with_metadata(self, raw_packet_bytes: bytes) -> None:
         packet = TelemetryPacket.from_bytes(
@@ -65,9 +65,7 @@ class TestTelemetryPacket:
         assert packet.source_id == "GS1"
 
     def test_data_length_validation(self) -> None:
-        header = CCSDSPrimaryHeader(
-            apid=0x100, seq_count=0, data_length=7, sec_hdr_flag=0
-        )
+        header = CCSDSPrimaryHeader(apid=0x100, seq_count=0, data_length=7, sec_hdr_flag=0)
         with pytest.raises(ValueError, match="data field mismatch"):
             TelemetryPacket(
                 header=header,
@@ -77,7 +75,7 @@ class TestTelemetryPacket:
 
     def test_packet_is_frozen(self, telemetry_packet: TelemetryPacket) -> None:
         with pytest.raises(ValidationError):
-            telemetry_packet.user_data = b"\xFF"  # type: ignore[misc]
+            telemetry_packet.user_data = b"\xff"  # type: ignore[misc]
 
     def test_bytearray_user_data_coerced(self) -> None:
         header = CCSDSPrimaryHeader(apid=0x010, seq_count=0, data_length=3, sec_hdr_flag=0)

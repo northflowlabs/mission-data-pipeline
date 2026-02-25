@@ -65,8 +65,10 @@ class ParquetLoader(Loader[ParquetLoaderConfig]):
         df = dataset.to_wide_dataframe()
         if df.empty:
             return
-        self._write_df(df.reset_index().rename(columns={"index": "time_tai"}),
-                       self.config.output_dir / "telemetry.parquet")
+        self._write_df(
+            df.reset_index().rename(columns={"index": "time_tai"}),
+            self.config.output_dir / "telemetry.parquet",
+        )
 
     def _write_df(self, df: pd.DataFrame, path: Path) -> None:
         table = pa.Table.from_pandas(df, preserve_index=False)

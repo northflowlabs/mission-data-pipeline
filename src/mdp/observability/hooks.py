@@ -70,17 +70,17 @@ class HookManager:
     )
 
     def __init__(self) -> None:
-        self._hooks: dict[str, EventHook] = defaultdict(
-            lambda: EventHook("<dynamic>")
-        )
+        self._hooks: dict[str, EventHook] = defaultdict(lambda: EventHook("<dynamic>"))
         for event_name in self.BUILTIN_EVENTS:
             self._hooks[event_name] = EventHook(event_name)
 
     def on(self, event: str) -> Callable[[EventHandler], EventHandler]:
         """Decorator to register a handler for a named event."""
+
         def _decorator(handler: EventHandler) -> EventHandler:
             self._hooks[event].register(handler)
             return handler
+
         return _decorator
 
     def register(self, event: str, handler: EventHandler) -> None:

@@ -33,6 +33,7 @@ class StageRegistry:
             self._extractors[name] = cls
             cls._registry_name = name  # type: ignore[attr-defined]
             return cls
+
         return _decorator
 
     def transformer(self, name: str) -> Callable[[type], type]:
@@ -40,6 +41,7 @@ class StageRegistry:
             self._transformers[name] = cls
             cls._registry_name = name  # type: ignore[attr-defined]
             return cls
+
         return _decorator
 
     def loader(self, name: str) -> Callable[[type], type]:
@@ -47,6 +49,7 @@ class StageRegistry:
             self._loaders[name] = cls
             cls._registry_name = name  # type: ignore[attr-defined]
             return cls
+
         return _decorator
 
     # ------------------------------------------------------------------ #

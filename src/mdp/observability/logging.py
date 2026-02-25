@@ -39,12 +39,14 @@ def configure_logging(
     ]
 
     if include_caller:
-        shared_processors.append(structlog.processors.CallsiteParameterAdder(
-            parameters=[
-                structlog.processors.CallsiteParameter.MODULE,
-                structlog.processors.CallsiteParameter.LINENO,
-            ]
-        ))
+        shared_processors.append(
+            structlog.processors.CallsiteParameterAdder(
+                parameters=[
+                    structlog.processors.CallsiteParameter.MODULE,
+                    structlog.processors.CallsiteParameter.LINENO,
+                ]
+            )
+        )
 
     if fmt == "json":
         structlog.processors.JSONRenderer()
@@ -59,9 +61,7 @@ def configure_logging(
             structlog.processors.format_exc_info,
             structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
         ],
-        wrapper_class=structlog.make_filtering_bound_logger(
-            logging.getLevelName(level.upper())
-        ),
+        wrapper_class=structlog.make_filtering_bound_logger(logging.getLevelName(level.upper())),
         context_class=dict,
         logger_factory=structlog.PrintLoggerFactory(file=sys.stderr),
         cache_logger_on_first_use=True,

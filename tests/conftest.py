@@ -52,7 +52,7 @@ def make_raw_packet(
 
 @pytest.fixture
 def raw_packet_bytes() -> bytes:
-    return make_raw_packet(apid=0x100, seq_count=42, user_data=b"\xDE\xAD\xBE\xEF")
+    return make_raw_packet(apid=0x100, seq_count=42, user_data=b"\xde\xad\xbe\xef")
 
 
 @pytest.fixture
@@ -87,9 +87,12 @@ def binary_telemetry_file(tmp_path: Path) -> Path:
     outfile = tmp_path / "telemetry.bin"
     with open(outfile, "wb") as fh:
         for i in range(10):
-            fh.write(make_raw_packet(
-                apid=0x100, seq_count=i,
-                user_data=struct.pack(">I", i * 1000),
-                sec_hdr=False,
-            ))
+            fh.write(
+                make_raw_packet(
+                    apid=0x100,
+                    seq_count=i,
+                    user_data=struct.pack(">I", i * 1000),
+                    sec_hdr=False,
+                )
+            )
     return outfile

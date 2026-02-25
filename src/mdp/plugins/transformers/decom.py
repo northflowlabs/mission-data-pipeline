@@ -19,14 +19,14 @@ from mdp.models.packet import TelemetryPacket
 from mdp.models.parameter import EngineeringParameter, ParameterType, RawValue
 
 _STRUCT_FMTS: dict[tuple[ParameterType, int], str] = {
-    (ParameterType.UINT, 8):  ">B",
+    (ParameterType.UINT, 8): ">B",
     (ParameterType.UINT, 16): ">H",
     (ParameterType.UINT, 32): ">I",
     (ParameterType.UINT, 64): ">Q",
-    (ParameterType.INT,  8):  ">b",
-    (ParameterType.INT,  16): ">h",
-    (ParameterType.INT,  32): ">i",
-    (ParameterType.INT,  64): ">q",
+    (ParameterType.INT, 8): ">b",
+    (ParameterType.INT, 16): ">h",
+    (ParameterType.INT, 32): ">i",
+    (ParameterType.INT, 64): ">q",
     (ParameterType.FLOAT, 32): ">f",
     (ParameterType.DOUBLE, 64): ">d",
 }

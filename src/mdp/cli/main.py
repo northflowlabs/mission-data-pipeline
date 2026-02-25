@@ -166,7 +166,9 @@ def inspect(file: Path, max_packets: int, apid: tuple[int, ...]) -> None:
 )
 @click.option("--pipeline-name", default="mdp-run", show_default=True)
 @click.option(
-    "--dry-run", is_flag=True, default=False,
+    "--dry-run",
+    is_flag=True,
+    default=False,
     help="Extract and transform only; skip loading.",
 )
 @click.option("--max-batches", default=None, type=int, help="Stop after N batches.")

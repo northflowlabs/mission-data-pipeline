@@ -70,7 +70,7 @@ class TestBinaryPacketExtractor:
         outfile = tmp_path / "framed.bin"
         with open(outfile, "wb") as fh:
             for i in range(3):
-                fh.write(b"\xFF\xFF")
+                fh.write(b"\xff\xff")
                 fh.write(SYNC_MARKER)
                 fh.write(make_raw_packet(apid=0x050, seq_count=i, user_data=b"\x00\x00\x00\x00"))
 
