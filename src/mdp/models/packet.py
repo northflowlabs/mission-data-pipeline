@@ -135,7 +135,9 @@ class TelemetryPacket(BaseModel):
         cls,
         raw: bytes,
         sec_hdr_length: int = 0,
-        **metadata: object,
+        source_time_tai: float | None = None,
+        ground_receipt_time: float | None = None,
+        source_id: str | None = None,
     ) -> TelemetryPacket:
         """Parse a raw byte buffer into a TelemetryPacket.
 
@@ -158,7 +160,9 @@ class TelemetryPacket(BaseModel):
             header=header,
             secondary_header=sec_hdr,
             user_data=user_data,
-            **metadata,
+            source_time_tai=source_time_tai,
+            ground_receipt_time=ground_receipt_time,
+            source_id=source_id,
         )
 
     @property

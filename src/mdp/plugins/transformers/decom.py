@@ -18,17 +18,17 @@ from mdp.models.dataset import TelemetryDataset
 from mdp.models.packet import TelemetryPacket
 from mdp.models.parameter import EngineeringParameter, ParameterType, RawValue
 
-_STRUCT_FMTS: dict[tuple[ParameterType, int], str] = {
-    (ParameterType.UINT, 8): ">B",
-    (ParameterType.UINT, 16): ">H",
-    (ParameterType.UINT, 32): ">I",
-    (ParameterType.UINT, 64): ">Q",
-    (ParameterType.INT, 8): ">b",
-    (ParameterType.INT, 16): ">h",
-    (ParameterType.INT, 32): ">i",
-    (ParameterType.INT, 64): ">q",
-    (ParameterType.FLOAT, 32): ">f",
-    (ParameterType.DOUBLE, 64): ">d",
+_STRUCT_FMTS: dict[tuple[str, int], str] = {
+    (ParameterType.UINT.value, 8): ">B",
+    (ParameterType.UINT.value, 16): ">H",
+    (ParameterType.UINT.value, 32): ">I",
+    (ParameterType.UINT.value, 64): ">Q",
+    (ParameterType.INT.value, 8): ">b",
+    (ParameterType.INT.value, 16): ">h",
+    (ParameterType.INT.value, 32): ">i",
+    (ParameterType.INT.value, 64): ">q",
+    (ParameterType.FLOAT.value, 32): ">f",
+    (ParameterType.DOUBLE.value, 64): ">d",
 }
 
 
@@ -97,18 +97,19 @@ class DecomTransformer(Transformer[DecomConfig]):
             seq_count=packet.seq_count,
             sample_time_tai=tai,
             raw_value=raw_value,
-            eng_value=raw_value,
+            eng_value=raw_value if not isinstance(raw_value, bytes) else raw_value.hex(),
             unit=pdef.unit,
         )
 
     def _decode_bytes(self, raw_bytes: bytes, pdef: ParameterDefinition) -> RawValue:
         endian = "<" if pdef.little_endian else ">"
-        fmt_key = (pdef.param_type, pdef.bit_length)
+        fmt_key = (pdef.param_type.value, pdef.bit_length)
 
         if fmt_key in _STRUCT_FMTS:
             fmt = _STRUCT_FMTS[fmt_key].replace(">", endian)
             (value,) = struct.unpack(fmt, raw_bytes)
-            return value  # type: ignore[return-value]
+            result: RawValue = value
+            return result
 
         if pdef.param_type == ParameterType.BOOLEAN:
             return bool(raw_bytes[0])

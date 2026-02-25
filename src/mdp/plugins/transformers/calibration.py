@@ -12,7 +12,7 @@ Two calibration types are supported:
 from __future__ import annotations
 
 import bisect
-from enum import StrEnum
+from enum import Enum
 
 from pydantic import BaseModel, Field
 
@@ -22,7 +22,7 @@ from mdp.models.dataset import TelemetryDataset
 from mdp.models.parameter import EngineeringParameter
 
 
-class CalibrationMethod(StrEnum):
+class CalibrationMethod(str, Enum):
     POLYNOMIAL = "polynomial"
     TABLE = "table"
     IDENTITY = "identity"

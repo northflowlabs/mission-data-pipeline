@@ -19,11 +19,13 @@ This layout is directly compatible with tools like HDFView, h5py, and xarray.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Annotated
 
 import h5py
 import numpy as np
+from numpy.typing import NDArray
 from pydantic import BaseModel, Field
 
 from mdp.core.base import Loader
@@ -103,7 +105,7 @@ class HDF5Loader(Loader[HDF5LoaderConfig]):
         self,
         grp: h5py.Group,
         name: str,
-        data: np.ndarray,
+        data: NDArray[np.generic],
         dtype: type | None = None,
     ) -> None:
         if name not in grp:
@@ -124,8 +126,9 @@ class HDF5Loader(Loader[HDF5LoaderConfig]):
             ds[old_size:] = data
 
     @staticmethod
-    def _coerce_numeric(values: list[object]) -> np.ndarray | None:
+    def _coerce_numeric(values: Sequence[object]) -> NDArray[np.float64] | None:
         try:
-            return np.array(values, dtype=np.float64)
+            arr: NDArray[np.float64] = np.array(values, dtype=np.float64)
+            return arr
         except (TypeError, ValueError):
             return None

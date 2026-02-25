@@ -17,7 +17,7 @@ import abc
 import time
 from collections.abc import AsyncIterator, Iterator
 from dataclasses import dataclass, field
-from enum import StrEnum
+from enum import Enum
 from typing import Any, Generic, TypeVar
 
 from pydantic import BaseModel
@@ -27,7 +27,7 @@ from mdp.models.dataset import TelemetryDataset
 ConfigT = TypeVar("ConfigT", bound=BaseModel)
 
 
-class StageStatus(StrEnum):
+class StageStatus(str, Enum):
     PENDING = "pending"
     RUNNING = "running"
     SUCCESS = "success"

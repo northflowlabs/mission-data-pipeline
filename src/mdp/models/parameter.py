@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from enum import StrEnum
+from enum import Enum
 from typing import Annotated
 
 from pydantic import BaseModel, Field
 
 
-class ParameterType(StrEnum):
+class ParameterType(str, Enum):
     UINT = "uint"
     INT = "int"
     FLOAT = "float"

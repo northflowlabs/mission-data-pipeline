@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
 import click
 from rich.console import Console
@@ -131,7 +132,7 @@ def inspect(file: Path, max_packets: int, apid: tuple[int, ...]) -> None:
             if count >= max_packets:
                 break
     except FileNotFoundError as exc:
-        console.print(f"[red]Error:[/] {exc}", file=sys.stderr)
+        Console(stderr=True).print(f"[red]Error:[/] {exc}")
         sys.exit(1)
 
     console.print(table)
@@ -186,18 +187,18 @@ def run(
     from mdp.core.pipeline import Pipeline, PipelineConfig
     from mdp.core.registry import registry
 
-    ext_cls = registry.get_extractor(extractor_name)
+    ext_cls: Any = registry.get_extractor(extractor_name)
     ext_cfg_data = _load_json(extractor_config) if extractor_config else {}
     extractor = ext_cls(ext_cls.config_class(**ext_cfg_data))
 
     transformers = []
     for tname in transformer_names:
-        t_cls = registry.get_transformer(tname)
+        t_cls: Any = registry.get_transformer(tname)
         transformers.append(t_cls(t_cls.config_class()))
 
     loader = None
     if loader_name and not dry_run:
-        loader_cls = registry.get_loader(loader_name)
+        loader_cls: Any = registry.get_loader(loader_name)
         loader_cfg_data = _load_json(loader_config) if loader_config else {}
         loader = loader_cls(loader_cls.config_class(**loader_cfg_data))
 
@@ -219,6 +220,6 @@ def run(
         sys.exit(1)
 
 
-def _load_json(path: Path) -> dict:
+def _load_json(path: Path) -> dict[str, Any]:
     with open(path) as fh:
-        return json.load(fh)
+        return json.load(fh)  # type: ignore[no-any-return]
