@@ -15,9 +15,10 @@ from __future__ import annotations
 
 import abc
 import time
+from collections.abc import AsyncIterator, Iterator
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any, AsyncIterator, Generic, Iterator, TypeVar
+from typing import Any, Generic, TypeVar
 
 from pydantic import BaseModel
 

@@ -17,8 +17,9 @@ from __future__ import annotations
 import io
 import struct
 import time
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Annotated, Iterator
+from typing import Annotated
 
 from pydantic import BaseModel, Field
 

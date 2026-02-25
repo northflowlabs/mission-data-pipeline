@@ -14,12 +14,10 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
-from typing import Optional
 
 import click
 from rich.console import Console
 from rich.table import Table
-from rich.text import Text
 
 from mdp.__version__ import __version__
 from mdp.observability.logging import configure_logging
@@ -167,17 +165,20 @@ def inspect(file: Path, max_packets: int, apid: tuple[int, ...]) -> None:
     help="Transformer plugin names (repeatable, applied in order).",
 )
 @click.option("--pipeline-name", default="mdp-run", show_default=True)
-@click.option("--dry-run", is_flag=True, default=False, help="Extract and transform only; skip loading.")
+@click.option(
+    "--dry-run", is_flag=True, default=False,
+    help="Extract and transform only; skip loading.",
+)
 @click.option("--max-batches", default=None, type=int, help="Stop after N batches.")
 def run(
     extractor_name: str,
-    loader_name: Optional[str],
-    extractor_config: Optional[Path],
-    loader_config: Optional[Path],
+    loader_name: str | None,
+    extractor_config: Path | None,
+    loader_config: Path | None,
     transformer_names: tuple[str, ...],
     pipeline_name: str,
     dry_run: bool,
-    max_batches: Optional[int],
+    max_batches: int | None,
 ) -> None:
     """Run a pipeline from the command line using registered plugins."""
     from mdp.core.pipeline import Pipeline, PipelineConfig

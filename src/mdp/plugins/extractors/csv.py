@@ -12,8 +12,9 @@ as commonly produced by ground segment SCICON or MCS tools.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Annotated, Iterator
+from typing import Annotated
 
 import pandas as pd
 from pydantic import BaseModel, Field

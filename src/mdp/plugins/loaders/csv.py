@@ -8,7 +8,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pandas as pd
 from pydantic import BaseModel, Field
 
 from mdp.core.base import Loader

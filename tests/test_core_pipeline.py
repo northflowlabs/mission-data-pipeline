@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Iterator
+from collections.abc import Iterator
 
-import pytest
 from pydantic import BaseModel
 
 from mdp.core.base import (
@@ -15,10 +13,9 @@ from mdp.core.base import (
     StageStatus,
     Transformer,
 )
-from mdp.core.pipeline import Pipeline, PipelineConfig, PipelineResult
+from mdp.core.pipeline import Pipeline, PipelineConfig
 from mdp.models.dataset import TelemetryDataset
 from mdp.models.parameter import EngineeringParameter
-
 
 # --------------------------------------------------------------------------- #
 #  Minimal stub implementations                                                #

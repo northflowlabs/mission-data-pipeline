@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-import time
-
 import pytest
 
-from mdp.observability.metrics import PipelineMetrics, StageMetric
 from mdp.observability.hooks import EventHook, HookManager
 from mdp.observability.logging import configure_logging
+from mdp.observability.metrics import PipelineMetrics, StageMetric
 
 
 class TestPipelineMetrics:

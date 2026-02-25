@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import bisect
 from enum import StrEnum
-from typing import Annotated
 
 from pydantic import BaseModel, Field
 

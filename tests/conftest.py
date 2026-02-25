@@ -3,15 +3,13 @@
 from __future__ import annotations
 
 import struct
-import time
 from pathlib import Path
 
 import pytest
 
-from mdp.models.packet import CCSDSPrimaryHeader, PacketSequenceFlags, TelemetryPacket
 from mdp.models.dataset import TelemetryDataset
+from mdp.models.packet import PacketSequenceFlags, TelemetryPacket
 from mdp.models.parameter import EngineeringParameter
-
 
 # --------------------------------------------------------------------------- #
 #  Helper — build a minimal valid CCSDS packet as raw bytes                    #

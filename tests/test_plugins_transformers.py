@@ -3,18 +3,11 @@
 from __future__ import annotations
 
 import struct
-from pathlib import Path
 
 import pytest
 
 from mdp.models.dataset import TelemetryDataset
 from mdp.models.parameter import EngineeringParameter, ParameterType
-from mdp.plugins.transformers.decom import (
-    DecomConfig,
-    DecomTransformer,
-    ParameterDefinition,
-)
-from mdp.plugins.transformers.filter import ApidFilterConfig, ApidFilterTransformer
 from mdp.plugins.transformers.calibration import (
     CalibrationConfig,
     CalibrationEntry,
@@ -22,8 +15,13 @@ from mdp.plugins.transformers.calibration import (
     CalibrationTransformer,
     _interpolate,
 )
+from mdp.plugins.transformers.decom import (
+    DecomConfig,
+    DecomTransformer,
+    ParameterDefinition,
+)
+from mdp.plugins.transformers.filter import ApidFilterConfig, ApidFilterTransformer
 from tests.conftest import make_raw_packet
-
 
 # --------------------------------------------------------------------------- #
 #  Helpers                                                                     #

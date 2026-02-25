@@ -2,16 +2,14 @@
 
 from __future__ import annotations
 
-import struct
-
 import pytest
+from pydantic import ValidationError
 
 from mdp.models.packet import (
     CCSDSPrimaryHeader,
     PacketSequenceFlags,
     TelemetryPacket,
 )
-from tests.conftest import make_raw_packet
 
 
 class TestCCSDSPrimaryHeader:
@@ -78,7 +76,7 @@ class TestTelemetryPacket:
             )
 
     def test_packet_is_frozen(self, telemetry_packet: TelemetryPacket) -> None:
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             telemetry_packet.user_data = b"\xFF"  # type: ignore[misc]
 
     def test_bytearray_user_data_coerced(self) -> None:

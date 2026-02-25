@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Annotated, Union
+from typing import Annotated
 
 from pydantic import BaseModel, Field
 
@@ -19,8 +19,8 @@ class ParameterType(StrEnum):
     STRING = "string"
 
 
-RawValue = Union[int, float, bytes, str, bool]
-EngValue = Union[int, float, str, bool]
+RawValue = int | float | bytes | str | bool
+EngValue = int | float | str | bool
 
 
 class RawParameter(BaseModel):

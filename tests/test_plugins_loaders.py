@@ -5,14 +5,12 @@ from __future__ import annotations
 from pathlib import Path
 
 import pandas as pd
-import pytest
 
 from mdp.models.dataset import TelemetryDataset
 from mdp.models.parameter import EngineeringParameter
 from mdp.plugins.loaders.csv import CsvLoader, CsvLoaderConfig
-from mdp.plugins.loaders.parquet import ParquetLoader, ParquetLoaderConfig
 from mdp.plugins.loaders.hdf5 import HDF5Loader, HDF5LoaderConfig
-
+from mdp.plugins.loaders.parquet import ParquetLoader, ParquetLoaderConfig
 
 # --------------------------------------------------------------------------- #
 #  Shared fixture                                                              #

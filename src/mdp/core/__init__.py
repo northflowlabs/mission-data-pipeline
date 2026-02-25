@@ -2,11 +2,11 @@
 
 from mdp.core.base import (
     Extractor,
-    Transformer,
     Loader,
     PipelineStage,
     StageResult,
     StageStatus,
+    Transformer,
 )
 from mdp.core.pipeline import Pipeline, PipelineConfig, PipelineResult
 from mdp.core.registry import StageRegistry, registry

@@ -80,7 +80,7 @@ class HDF5Loader(Loader[HDF5LoaderConfig]):
         validity = np.array([int(s.validity) for s in samples], dtype=np.uint8)
 
         eng_values = [s.eng_value for s in samples]
-        raw_values = [s.raw_value for s in samples]
+        [s.raw_value for s in samples]
 
         grp = root.require_group(name)
 

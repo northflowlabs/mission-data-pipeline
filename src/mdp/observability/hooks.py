@@ -18,10 +18,9 @@ from __future__ import annotations
 
 import contextlib
 from collections import defaultdict
-from typing import Any, Callable
+from collections.abc import Callable
 
-
-EventHandler = Callable[..., Any]
+EventHandler = Callable[..., None]
 
 
 class EventHook:
@@ -38,7 +37,7 @@ class EventHook:
         with contextlib.suppress(ValueError):
             self._handlers.remove(handler)
 
-    def fire(self, *args: Any, **kwargs: Any) -> None:
+    def fire(self, *args: object, **kwargs: object) -> None:
         """Invoke all registered handlers, swallowing individual errors."""
         for handler in list(self._handlers):
             with contextlib.suppress(Exception):
@@ -87,7 +86,7 @@ class HookManager:
     def register(self, event: str, handler: EventHandler) -> None:
         self._hooks[event].register(handler)
 
-    def fire(self, event: str, *args: Any, **kwargs: Any) -> None:
+    def fire(self, event: str, *args: object, **kwargs: object) -> None:
         if event in self._hooks:
             self._hooks[event].fire(*args, **kwargs)
 

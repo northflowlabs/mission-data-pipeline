@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
-
-if TYPE_CHECKING:
-    from mdp.core.base import Extractor, Loader, Transformer
+from collections.abc import Callable
 
 
 class StageRegistry:
@@ -31,21 +28,21 @@ class StageRegistry:
     #  Registration decorators                                             #
     # ------------------------------------------------------------------ #
 
-    def extractor(self, name: str) -> Any:
+    def extractor(self, name: str) -> Callable[[type], type]:
         def _decorator(cls: type) -> type:
             self._extractors[name] = cls
             cls._registry_name = name  # type: ignore[attr-defined]
             return cls
         return _decorator
 
-    def transformer(self, name: str) -> Any:
+    def transformer(self, name: str) -> Callable[[type], type]:
         def _decorator(cls: type) -> type:
             self._transformers[name] = cls
             cls._registry_name = name  # type: ignore[attr-defined]
             return cls
         return _decorator
 
-    def loader(self, name: str) -> Any:
+    def loader(self, name: str) -> Callable[[type], type]:
         def _decorator(cls: type) -> type:
             self._loaders[name] = cls
             cls._registry_name = name  # type: ignore[attr-defined]
