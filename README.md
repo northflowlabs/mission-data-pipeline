@@ -361,7 +361,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, coding standards, 
 
 [Northflow Technologies](https://northflow.no) builds institutional-grade evidence infrastructure for climate, space, and critical systems. Our core asset is the [**Hypothesis Generation Engine (HGE)**](https://northflow.no/research/hge) — a structured system for machine-driven hypothesis search, evaluation, and verification under uncertainty.
 
-Built in Norway. Validated on Gaia DR3 astronomical data. Adapting to ESA Sentinel Earth Observation.
+Built in Stavanger, Norway.
 
 This repository is part of Northflow's open-source infrastructure layer, demonstrating the data processing patterns that underpin the HGE's evidence pipeline.
 
