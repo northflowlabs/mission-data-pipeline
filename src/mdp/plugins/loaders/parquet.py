@@ -1,4 +1,4 @@
-"""Parquet loader — persists telemetry parameters to Apache Parquet files.
+"""Parquet loader: persists telemetry parameters to Apache Parquet files.
 
 One Parquet file is written per parameter, named ``<output_dir>/<param>.parquet``.
 Schema uses ``pyarrow`` for efficient columnar storage with Snappy compression.

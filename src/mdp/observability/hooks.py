@@ -1,4 +1,4 @@
-"""Event hooks — a lightweight publish/subscribe mechanism for pipeline events.
+"""Event hooks: a lightweight publish/subscribe mechanism for pipeline events.
 
 Hooks allow external code (monitoring, alerting, custom logging) to react
 to pipeline lifecycle events without modifying the core pipeline logic.
@@ -52,12 +52,12 @@ class HookManager:
 
     Built-in pipeline events
     ------------------------
-    ``pipeline.start``          — fired before the extractor begins
-    ``pipeline.complete``       — fired after all batches are processed
-    ``batch.extracted``         — fired after each extractor yield
-    ``batch.transformed``       — fired after all transformers process a batch
-    ``batch.loaded``            — fired after the loader persists a batch
-    ``stage.error``             — fired whenever any stage raises an exception
+    ``pipeline.start``: fired before the extractor begins
+    ``pipeline.complete``: fired after all batches are processed
+    ``batch.extracted``: fired after each extractor yield
+    ``batch.transformed``: fired after all transformers process a batch
+    ``batch.loaded``: fired after the loader persists a batch
+    ``stage.error``: fired whenever any stage raises an exception
     """
 
     BUILTIN_EVENTS = (

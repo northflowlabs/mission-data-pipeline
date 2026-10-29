@@ -1,4 +1,4 @@
-"""Observability — structured logging, metrics, and event hooks."""
+"""Observability: structured logging, metrics, and event hooks."""
 
 from mdp.observability.hooks import EventHook, HookManager
 from mdp.observability.logging import configure_logging

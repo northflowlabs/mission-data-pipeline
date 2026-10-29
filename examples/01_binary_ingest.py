@@ -1,4 +1,4 @@
-"""Example 01 — Binary telemetry ingest to Parquet.
+"""Example 01: Binary telemetry ingest to Parquet.
 
 Scenario
 --------
@@ -50,11 +50,11 @@ def generate_hk_packets(output_path: Path, n: int = 200) -> None:
     """Write n synthetic HK packets to a binary file.
 
     Packet user_data layout (12 bytes):
-      offset 0  — uint16: obc_temp_dn        (raw ADC counts, 0–4095)
-      offset 2  — uint16: bus_voltage_dn     (raw ADC counts, 0–4095)
-      offset 4  — uint16: bat_current_dn     (raw ADC counts, 0–4095)
-      offset 6  — float32: mission_time_s    (mission elapsed time)
-      offset 10 — uint16: checksum (placeholder)
+      offset 0, uint16: obc_temp_dn        (raw ADC counts, 0 to 4095)
+      offset 2, uint16: bus_voltage_dn     (raw ADC counts, 0 to 4095)
+      offset 4, uint16: bat_current_dn     (raw ADC counts, 0 to 4095)
+      offset 6, float32: mission_time_s    (mission elapsed time)
+      offset 10, uint16: checksum (placeholder)
     """
     import struct
     import math

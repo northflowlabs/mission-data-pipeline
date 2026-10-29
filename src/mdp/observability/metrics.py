@@ -1,4 +1,4 @@
-"""Pipeline metrics — lightweight counters and timing without external dependencies.
+"""Pipeline metrics: lightweight counters and timing without external dependencies.
 
 These are intentionally simple in-process accumulators.
 For production deployments, bridge these to Prometheus / OpenTelemetry via

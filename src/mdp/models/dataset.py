@@ -1,4 +1,4 @@
-"""TelemetryDataset — the primary in-memory container passed between pipeline stages."""
+"""TelemetryDataset: the primary in-memory container passed between pipeline stages."""
 
 from __future__ import annotations
 

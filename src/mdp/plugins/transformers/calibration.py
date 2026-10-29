@@ -1,4 +1,4 @@
-"""Calibration transformer — applies polynomial or table-lookup calibrations.
+"""Calibration transformer: applies polynomial or table-lookup calibrations.
 
 Two calibration types are supported:
 

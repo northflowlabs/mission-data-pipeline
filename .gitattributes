@@ -2,7 +2,7 @@
 # This ensures consistent diffs and CI behaviour regardless of developer OS.
 * text=auto eol=lf
 
-# Explicitly binary — never convert
+# Explicitly binary: never convert
 *.parquet binary
 *.h5      binary
 *.hdf5    binary

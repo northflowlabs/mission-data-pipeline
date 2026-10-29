@@ -1,12 +1,12 @@
-"""CSV telemetry extractor — reads pre-processed telemetry CSV files.
+"""CSV telemetry extractor: reads pre-processed telemetry CSV files.
 
 Expected columns (configurable):
-  - ``time``       — TAI seconds since J2000 (float)
-  - ``apid``       — Application Process Identifier (int)
-  - ``seq_count``  — packet sequence count (int)
-  - ``<param_N>``  — any number of parameter columns
+  - ``time``: TAI seconds since J2000 (float)
+  - ``apid``: Application Process Identifier (int)
+  - ``seq_count``: packet sequence count (int)
+  - ``<param_N>``: any number of parameter columns
 
-This extractor does not parse raw binary — it reads structured CSV exports
+This extractor does not parse raw binary: it reads structured CSV exports
 as commonly produced by ground segment SCICON or MCS tools.
 """
 

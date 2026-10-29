@@ -12,7 +12,7 @@ from mdp.models.packet import PacketSequenceFlags, TelemetryPacket
 from mdp.models.parameter import EngineeringParameter
 
 # --------------------------------------------------------------------------- #
-#  Helper — build a minimal valid CCSDS packet as raw bytes                    #
+#  Helper: build a minimal valid CCSDS packet as raw bytes                     #
 # --------------------------------------------------------------------------- #
 
 

@@ -43,7 +43,7 @@ console = Console()
 )
 @click.pass_context
 def cli(ctx: click.Context, log_level: str, log_format: str) -> None:
-    """Mission Data Pipeline (MDP) — modular ETL for space telemetry."""
+    """Mission Data Pipeline (MDP): modular ETL for space telemetry."""
     ctx.ensure_object(dict)
     configure_logging(level=log_level, fmt=log_format)  # type: ignore[arg-type]
 

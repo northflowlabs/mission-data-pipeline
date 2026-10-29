@@ -1,4 +1,4 @@
-"""Stage registry — allows plugins to self-register and be discovered by name."""
+"""Stage registry: allows plugins to self-register and be discovered by name."""
 
 from __future__ import annotations
 

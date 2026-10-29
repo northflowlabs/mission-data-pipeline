@@ -35,13 +35,13 @@ class CCSDSPrimaryHeader(BaseModel):
     """6-byte CCSDS Space Packet primary header.
 
     Bit layout (48 bits total):
-        [3]  version    — always 0b000
-        [1]  type       — 0=telemetry, 1=telecommand
-        [1]  sec_hdr    — secondary header present flag
-        [11] apid       — Application Process Identifier
-        [2]  seq_flags  — sequence flags
-        [14] seq_count  — packet sequence count (0–16383)
-        [16] data_len   — data field length minus 1 (octets)
+        [3]  version: always 0b000
+        [1]  type: 0=telemetry, 1=telecommand
+        [1]  sec_hdr: secondary header present flag
+        [11] apid: Application Process Identifier
+        [2]  seq_flags: sequence flags
+        [14] seq_count: packet sequence count (0 to 16383)
+        [16] data_len: data field length minus 1 (octets)
     """
 
     model_config = {"frozen": True}
@@ -149,7 +149,7 @@ class TelemetryPacket(BaseModel):
             Length of the secondary header in bytes.  This is mission-specific
             and must be provided by the caller when ``sec_hdr_flag`` is set.
             Per CCSDS 133.0-B-2, the secondary header format is not standardised
-            at the Space Packet layer — common values are 4 (CDS short) or
+            at the Space Packet layer; common values are 4 (CDS short) or
             10 (CUC with fine time).  Defaults to 0 (no secondary header parsed).
         """
         header = CCSDSPrimaryHeader.from_bytes(raw[:6])

@@ -1,4 +1,4 @@
-"""Pipeline orchestrator — wires Extractor → Transformer(s) → Loader."""
+"""Pipeline orchestrator: wires Extractor → Transformer(s) → Loader."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Telemetry parameter models — raw and engineering-unit values."""
+"""Telemetry parameter models: raw and engineering-unit values."""
 
 from __future__ import annotations
 

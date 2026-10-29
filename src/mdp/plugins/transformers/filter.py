@@ -1,4 +1,4 @@
-"""APID filter transformer — drop packets with unwanted APIDs."""
+"""APID filter transformer: drop packets with unwanted APIDs."""
 
 from __future__ import annotations
 
@@ -12,11 +12,11 @@ from mdp.models.dataset import TelemetryDataset
 class ApidFilterConfig(BaseModel):
     include: list[int] | None = Field(
         default=None,
-        description="Whitelist — only these APIDs are kept. Mutually exclusive with ``exclude``.",
+        description="Whitelist: only these APIDs are kept. Mutually exclusive with ``exclude``.",
     )
     exclude: list[int] | None = Field(
         default=None,
-        description="Blacklist — these APIDs are dropped.",
+        description="Blacklist: these APIDs are dropped.",
     )
 
     def model_post_init(self, __context: object) -> None:

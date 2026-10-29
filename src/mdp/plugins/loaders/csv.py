@@ -1,4 +1,4 @@
-"""CSV loader — writes telemetry parameters to CSV files.
+"""CSV loader: writes telemetry parameters to CSV files.
 
 One file per parameter, or a single wide-format CSV with all parameters
 merged on TAI time.

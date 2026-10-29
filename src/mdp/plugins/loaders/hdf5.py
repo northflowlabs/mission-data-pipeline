@@ -1,4 +1,4 @@
-"""HDF5 loader — persists telemetry data to HDF5/NetCDF-compatible files.
+"""HDF5 loader: persists telemetry data to HDF5/NetCDF-compatible files.
 
 Data layout
 -----------

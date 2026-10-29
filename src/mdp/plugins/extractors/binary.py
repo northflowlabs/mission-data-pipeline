@@ -1,4 +1,4 @@
-"""Binary packet extractor — reads raw CCSDS packet streams from files or byte streams.
+"""Binary packet extractor: reads raw CCSDS packet streams from files or byte streams.
 
 Supports:
   - Fixed-size packet files (flat binary dump)

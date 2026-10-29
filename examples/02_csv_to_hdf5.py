@@ -1,4 +1,4 @@
-"""Example 02 — CSV telemetry to HDF5 with APID filtering.
+"""Example 02: CSV telemetry to HDF5 with APID filtering.
 
 Scenario
 --------

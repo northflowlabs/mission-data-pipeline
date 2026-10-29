@@ -1,4 +1,4 @@
-"""Decommutation transformer — extracts named parameters from packet user_data.
+"""Decommutation transformer: extracts named parameters from packet user_data.
 
 Each ParameterDefinition describes the bit-level location of a parameter
 within a specific APID's user data field.  This mirrors the concept of an

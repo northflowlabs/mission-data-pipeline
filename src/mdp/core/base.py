@@ -1,9 +1,9 @@
 """Abstract base classes for all pipeline stages.
 
 Every stage in a Mission Data Pipeline is one of:
-  - Extractor  — reads raw data and yields TelemetryDatasets
-  - Transformer — mutates / enriches a TelemetryDataset in-place
-  - Loader      — persists a TelemetryDataset to a sink
+  - Extractor: reads raw data and yields TelemetryDatasets
+  - Transformer: mutates / enriches a TelemetryDataset in-place
+  - Loader: persists a TelemetryDataset to a sink
 
 All stages are:
   - Typed via Pydantic config models
@@ -70,7 +70,7 @@ class PipelineStage(abc.ABC, Generic[ConfigT]):
         return self._name
 
     def validate_config(self) -> None:
-        """Optional hook — raise ValueError if config is semantically invalid."""
+        """Optional hook: raise ValueError if config is semantically invalid."""
 
     def setup(self) -> None:
         """Called once before the stage is first executed (open connections, etc.)."""
@@ -96,7 +96,7 @@ class Extractor(PipelineStage[ConfigT]):
         """Yield successive TelemetryDataset batches from the source."""
 
     async def extract_async(self) -> AsyncIterator[TelemetryDataset]:
-        """Async wrapper — by default delegates to the sync implementation."""
+        """Async wrapper: by default delegates to the sync implementation."""
         for ds in self.extract():
             yield ds
 
