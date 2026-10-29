@@ -13,7 +13,7 @@
 **Do not report security vulnerabilities through public GitHub Issues.**
 
 Please report security issues by email to:  
-**security@northflow.no**
+**hello@northflow.no**
 
 Include in your report:
 - A description of the vulnerability and its potential impact

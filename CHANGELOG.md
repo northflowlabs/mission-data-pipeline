@@ -9,6 +9,13 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Fixed
+- `configure_logging()` no longer fails on the first log call, and `fmt="json"` now produces JSON lines
+- `mdp stages` and `mdp run` now see the built-in stages
+
+### Added
+- Documentation site under `docs/`, matching the `mkdocs.yml` navigation
+
 ### Planned
 - `sec_hdr_length` per-APID override map in `BinaryExtractorConfig`
 - YAML-based pipeline definition file (`mdp run --config pipeline.yaml`)
@@ -80,5 +87,5 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
-[Unreleased]: https://github.com/northflowlabs/mission-data-pipeline/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/northflowlabs/mission-data-pipeline/releases/tag/v0.1.0
+[Unreleased]: https://github.com/northflowlabs/mission-data-pipeline/compare/8b2a5606e6877d77aedc2c48d136c5180a2e48f0...main
+[0.1.0]: https://github.com/northflowlabs/mission-data-pipeline/commit/8b2a5606e6877d77aedc2c48d136c5180a2e48f0

@@ -118,14 +118,13 @@ print(result.summary())
 mdp stages
 
 # Inspect a raw binary telemetry file
-mdp inspect telemetry.bin --max-packets 50 --apid 0x100
+mdp inspect telemetry.bin --max-packets 50 --apid 256
 
 # Run a pipeline from JSON config files
 mdp run \
   --extractor binary \
   --extractor-config extractor.json \
-  --transformer decom \
-  --transformer calibration \
+  --transformer apid_filter \
   --loader parquet \
   --loader-config loader.json \
   --pipeline-name hk-ingest
