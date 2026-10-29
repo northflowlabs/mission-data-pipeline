@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "A lightweight, modular ETL framework for scientific and space telemetry data"
 readme = "README.md"
 license = { text = "MIT" }
-authors = [{ name = "Northflow Technologies AS", email = "tech@northflow.no" }]
+authors = [{ name = "Northflow Technologies AS", email = "hello@northflow.no" }]
 keywords = ["telemetry", "etl", "space", "ccsds", "pipeline", "esa", "nasa"]
 classifiers = [
     "Development Status :: 3 - Alpha",

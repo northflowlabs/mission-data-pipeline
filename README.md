@@ -1,28 +1,24 @@
+<a href="https://northflow.no"><img src=".github/assets/northflow-mark.svg" alt="Northflow" width="40" height="40"></a>
+
 # Mission Data Pipeline (MDP)
 
-[![CI](https://github.com/northflowlabs/mission-data-pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/northflowlabs/mission-data-pipeline/actions)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Typed](https://img.shields.io/badge/typing-strict-brightgreen)](https://mypy.readthedocs.io/)
-[![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://docs.astral.sh/ruff/)
+MDP is a typed Python ETL framework for spacecraft telemetry that implements the CCSDS Space Packet Protocol (133.0-B-2).
 
-> **Part of the [Northflow Technologies](https://northflow.no) evidence infrastructure stack.**  
-> Institutional-grade data processing for climate, space, and critical systems.
+[Northflow Space and Research](https://research.northflow.no) · [Examples](examples/) · [Contributing](CONTRIBUTING.md) · [Licence](#licence)
 
-**A lightweight, modular ETL framework for scientific and space telemetry data.**  
-Clean, typed, and observable. Implements CCSDS Space Packet Protocol (133.0-B-2) natively.
-Built to integrate into ground segment workflows, research pipelines, and CI-driven data processing.
+[![CI](https://github.com/northflowlabs/mission-data-pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/northflowlabs/mission-data-pipeline/actions/workflows/ci.yml)
+[![Licence: MIT](https://img.shields.io/badge/licence-MIT-0e6b63)](LICENSE)
 
----
+MDP fits into ground segment workflows, research pipelines and CI-driven data processing.
 
 ## Context
 
 Ground segment software commonly presents one of two constraints:
 **monolithic MCS tools** that couple processing logic to proprietary GUIs, or **ad-hoc scripts** without defined interfaces, observability, or reproducibility guarantees.
 
-MDP occupies the space between: a composable Python library implementing standard telemetry data structures and a clean ETL contract. It can be embedded in any Python environment, executed headlessly in CI, or extended via typed plugins — with no proprietary runtime dependencies.
+MDP sits between the two: a composable Python library with standard telemetry data structures and a defined ETL contract. It runs in any Python environment, headless in CI, and extends through typed plugins, with no proprietary runtime dependencies.
 
-This library is part of Northflow's open evidence infrastructure. It demonstrates the data-layer patterns used in the [Hypothesis Generation Engine (HGE)](https://northflow.no/research/hge) for structured, reproducible processing of large-scale observational data.
+MDP follows the data-layer patterns Northflow uses in the [Hypothesis Generation Engine (HGE)](https://research.northflow.no/systems/hge) for reproducible processing of observational data.
 
 ```
 Raw binary (CCSDS) ──► BinaryExtractor
@@ -34,20 +30,16 @@ Raw binary (CCSDS) ──► BinaryExtractor
                         ParquetLoader / HDF5Loader / CsvLoader
 ```
 
----
-
 ## Features
 
-- **Typed end-to-end** — Pydantic v2 models for packets, frames, parameters, and all pipeline configurations
-- **CCSDS-native** — `CCSDSPrimaryHeader`, `TelemetryPacket`, `TelemetryFrame` with correct bit-field parsing per CCSDS 133.0-B-2 and 132.0-B-3
-- **Modular ETL** — register custom `Extractor`, `Transformer`, or `Loader` stages with a single decorator; no subclassing framework required
-- **Observable** — structured logging via structlog (console and JSON output modes), in-process pipeline metrics, lifecycle event hooks
-- **Multiple output sinks** — Apache Parquet (pyarrow, Snappy compression), HDF5 (gzip, append-safe, xarray-compatible), CSV
-- **CLI** — `mdp inspect`, `mdp run`, `mdp stages` for operator-facing tooling
-- **Async-capable** — extractors expose both synchronous and async generator interfaces
-- **Zero proprietary dependencies** — pure Python, no cloud services, no vendor lock-in
-
----
+- **Typed end-to-end**: Pydantic v2 models for packets, frames, parameters, and all pipeline configurations
+- **CCSDS-native**: `CCSDSPrimaryHeader`, `TelemetryPacket`, `TelemetryFrame` with correct bit-field parsing per CCSDS 133.0-B-2 and 132.0-B-3
+- **Modular ETL**: register custom `Extractor`, `Transformer`, or `Loader` stages with a single decorator; no subclassing framework required
+- **Observable**: structured logging via structlog (console and JSON output modes), in-process pipeline metrics, lifecycle event hooks
+- **Multiple output sinks**: Apache Parquet (pyarrow, Snappy compression), HDF5 (gzip, append-safe, xarray-compatible), CSV
+- **CLI**: `mdp inspect`, `mdp run`, `mdp stages` for operator-facing tooling
+- **Async-capable**: extractors expose both synchronous and async generator interfaces
+- **Zero proprietary dependencies**: pure Python, no cloud services, no vendor lock-in
 
 ## Installation
 
@@ -60,8 +52,6 @@ pip install -e ".[dev]"
 ```
 
 **Requirements:** Python ≥ 3.10, NumPy, Pandas, PyArrow, h5py, Pydantic v2, structlog, Click, Rich
-
----
 
 ## Quick Start
 
@@ -121,8 +111,6 @@ result = pipeline.run()
 print(result.summary())
 ```
 
----
-
 ## CLI
 
 ```bash
@@ -149,8 +137,6 @@ mdp run --extractor csv --extractor-config cfg.json --dry-run
 mdp version
 ```
 
----
-
 ## Architecture
 
 ```
@@ -164,10 +150,10 @@ src/mdp/
 │   ├── packet.py        # CCSDSPrimaryHeader, TelemetryPacket (CCSDS 133.0-B-2)
 │   ├── frame.py         # TelemetryFrame, TMFramePrimaryHeader (CCSDS 132.0-B-3)
 │   ├── parameter.py     # RawParameter, EngineeringParameter, ParameterRecord
-│   └── dataset.py       # TelemetryDataset — in-memory batch container
+│   └── dataset.py       # TelemetryDataset, in-memory batch container
 │
 ├── observability/
-│   ├── logging.py       # configure_logging() — structlog, console or JSON
+│   ├── logging.py       # configure_logging(): structlog, console or JSON
 │   ├── metrics.py       # PipelineMetrics, StageMetric accumulators
 │   └── hooks.py         # EventHook, HookManager (pub/sub lifecycle events)
 │
@@ -195,8 +181,6 @@ src/mdp/
 - **Observability is structural, not bolted on.** Metrics and hooks are integrated at the pipeline level. No logging is scattered through business logic.
 - **Plugins are first-class.** The `@registry` decorator is the only integration point. The core pipeline has no knowledge of plugin implementations.
 
----
-
 ## Data Model
 
 ### `CCSDSPrimaryHeader`
@@ -208,9 +192,9 @@ Implements the 6-byte CCSDS Space Packet primary header per **CCSDS 133.0-B-2, S
 | 3 | `version` | 0 (fixed) |
 | 1 | `type_flag` | 0=TM, 1=TC |
 | 1 | `sec_hdr_flag` | secondary header present |
-| 11 | `apid` | 0x000–0x7FF |
+| 11 | `apid` | 0x000 to 0x7FF |
 | 2 | `seq_flags` | see `PacketSequenceFlags` |
-| 14 | `seq_count` | 0–16383 (wraps) |
+| 14 | `seq_count` | 0 to 16383 (wraps) |
 | 16 | `data_length` | data field length − 1 |
 
 Supports `from_bytes()` / `to_bytes()` round-trip with full validation.
@@ -240,8 +224,6 @@ dataset.to_dataframe("obc_temp")         # tidy pd.DataFrame, sorted by TAI
 dataset.to_wide_dataframe()              # wide pd.DataFrame, indexed by TAI
 dataset.merge(other_dataset)             # non-destructive merge
 ```
-
----
 
 ## Extending MDP
 
@@ -289,8 +271,6 @@ def on_error(stage_name, exc):
     pagerduty_alert(f"Pipeline stage '{stage_name}' failed: {exc}")
 ```
 
----
-
 ## Examples
 
 | Script | Description |
@@ -307,8 +287,6 @@ python -m examples.02_csv_to_hdf5
 
 Both examples generate their own synthetic test data and require no external files.
 
----
-
 ## Testing
 
 ```bash
@@ -324,19 +302,15 @@ pytest tests/test_models_packet.py -v
 
 Current coverage: **82% overall**, >95% for `models/` and `observability/`.
 
----
-
 ## Roadmap
 
 - [ ] `sec_hdr_length` per-APID configuration in `BinaryExtractorConfig`
 - [ ] YAML-based pipeline definition (`mdp run --config pipeline.yaml`)
-- [ ] `KafkaExtractor` — real-time packet ingestion from Kafka topics
-- [ ] `SpacePyTransformer` — orbit/attitude parameter enrichment via SpacePy
-- [ ] `InfluxDBLoader` — time-series sink for Grafana/monitoring dashboards
+- [ ] `KafkaExtractor`: real-time packet ingestion from Kafka topics
+- [ ] `SpacePyTransformer`: orbit/attitude parameter enrichment via SpacePy
+- [ ] `InfluxDBLoader`: time-series sink for Grafana/monitoring dashboards
 - [ ] Async pipeline execution mode for concurrent extractors
 - [ ] OpenTelemetry metrics bridge for production observability stacks
-
----
 
 ## Reference Standards
 
@@ -349,26 +323,16 @@ This library implements or aligns with the following CCSDS and ECSS standards:
 | **CCSDS 301.0-B-4** | Time Code Formats | TAI/J2000 epoch convention throughout |
 | **ECSS-E-ST-70-41C** | TM/TC Packet Utilization | Parameter decommutation model, MIB conventions |
 
----
-
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, coding standards, and pull request guidelines.
 
----
+## About Northflow
 
-## About Northflow Technologies
+[Northflow Technologies AS](https://northflow.no), Stavanger, Norway, builds and runs products and platforms in Europe. Its research, [Northflow Space and Research](https://research.northflow.no), turns open satellite and scientific data into forecasts and analysis.
 
-[Northflow Technologies](https://northflow.no) builds institutional-grade evidence infrastructure for climate, space, and critical systems. Our core asset is the [**Hypothesis Generation Engine (HGE)**](https://northflow.no/research/hge) — a structured system for machine-driven hypothesis search, evaluation, and verification under uncertainty.
+## Licence
 
-Built in Stavanger, Norway.
+MDP is licensed under the [MIT License](LICENSE).
 
-This repository is part of Northflow's open-source infrastructure layer, demonstrating the data processing patterns that underpin the HGE's evidence pipeline.
-
----
-
-## License
-
-MIT — see [LICENSE](LICENSE).
-
-Copyright © 2026 Northflow Technologies AS
+Copyright 2026 Northflow Technologies AS
