@@ -162,3 +162,33 @@ class TestConfigureLogging:
 
     def test_with_caller_info(self) -> None:
         configure_logging(level="INFO", fmt="console", include_caller=True)
+
+
+def test_configure_logging_json_emits(capsys) -> None:
+    import json
+
+    import structlog
+
+    from mdp.observability.logging import configure_logging, get_logger
+
+    configure_logging(level="INFO", fmt="json")
+    try:
+        get_logger("mdp.test").info("hello", answer=42)
+        line = capsys.readouterr().err.strip().splitlines()[-1]
+        record = json.loads(line)
+        assert record["event"] == "hello"
+        assert record["answer"] == 42
+        assert record["level"] == "info"
+    finally:
+        structlog.reset_defaults()
+
+
+def test_cli_stages_lists_builtin_plugins() -> None:
+    from click.testing import CliRunner
+
+    from mdp.cli.main import cli
+
+    result = CliRunner().invoke(cli, ["stages"])
+    assert result.exit_code == 0
+    for name in ("binary", "decom", "calibration", "parquet", "hdf5"):
+        assert name in result.output

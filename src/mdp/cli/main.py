@@ -20,6 +20,7 @@ import click
 from rich.console import Console
 from rich.table import Table
 
+import mdp.plugins  # noqa: F401  (registers the built-in stages)
 from mdp.__version__ import __version__
 from mdp.observability.logging import configure_logging
 

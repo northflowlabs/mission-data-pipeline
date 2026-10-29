@@ -33,8 +33,7 @@ def configure_logging(
     """
     shared_processors: list[structlog.types.Processor] = [
         structlog.contextvars.merge_contextvars,
-        structlog.stdlib.add_log_level,
-        structlog.stdlib.add_logger_name,
+        structlog.processors.add_log_level,
         structlog.processors.TimeStamper(fmt="iso", utc=True),
     ]
 
@@ -48,18 +47,18 @@ def configure_logging(
             )
         )
 
+    renderer: structlog.types.Processor
     if fmt == "json":
-        structlog.processors.JSONRenderer()
+        renderer = structlog.processors.JSONRenderer()
     else:
-        structlog.dev.ConsoleRenderer(colors=True)
+        renderer = structlog.dev.ConsoleRenderer(colors=True)
 
     structlog.configure(
         processors=[
             *shared_processors,
-            structlog.stdlib.PositionalArgumentsFormatter(),
             structlog.processors.StackInfoRenderer(),
             structlog.processors.format_exc_info,
-            structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
+            renderer,
         ],
         wrapper_class=structlog.make_filtering_bound_logger(logging.getLevelName(level.upper())),
         context_class=dict,
