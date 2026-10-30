@@ -103,6 +103,10 @@ class HDF5Loader(Loader[HDF5LoaderConfig]):
 
         grp = root.require_group(name)
 
+        stored_unit = grp.attrs.get("unit")
+        if unit and stored_unit and stored_unit != unit:
+            raise ValueError(f"Parameter '{name}' mixes units: {stored_unit} and {unit}")
+
         # Every column of a parameter must stay the same length, so the value column
         # is settled before anything is written.
         typed = _typed_values(eng_values)
@@ -163,6 +167,8 @@ def _typed_values(values: Sequence[object]) -> NDArray[np.generic] | None:
     if all(isinstance(v, int) for v in values):
         integers = [int(v) for v in values]  # type: ignore[call-overload]
         return np.array(integers, dtype=np.uint64 if max(integers) >= 2**63 else np.int64)
+    if any(isinstance(v, int) and abs(v) > 2**53 for v in values):
+        raise ValueError("Integers beyond 2^53 cannot share a column with floats")
     return np.array(values, dtype=np.float64)
 
 

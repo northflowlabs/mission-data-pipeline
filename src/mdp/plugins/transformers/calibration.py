@@ -6,15 +6,17 @@ Two calibration types are supported:
     eng_value = c0 + c1*raw + c2*raw^2 + ... + cN*raw^N
 
 ``table``
-    eng_value = piecewise linear interpolation of (raw, eng) point pairs
+    eng_value = piecewise linear interpolation of (raw, eng) point pairs. Outside the
+    table the value is held at the nearest end and the sample is flagged out_of_limit.
 """
 
 from __future__ import annotations
 
 import bisect
 from enum import Enum
+from itertools import pairwise
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from mdp.core.base import Transformer
 from mdp.core.registry import registry
@@ -50,19 +52,37 @@ class CalibrationEntry(BaseModel):
         description="Engineering values corresponding to table_raw",
     )
 
+    @model_validator(mode="after")
+    def _check_definition(self) -> CalibrationEntry:
+        name = self.parameter_name
+        if self.method == CalibrationMethod.POLYNOMIAL and not self.coefficients:
+            raise ValueError(f"{name}: a polynomial calibration needs coefficients")
+        if self.method == CalibrationMethod.TABLE:
+            if not self.table_raw or not self.table_eng:
+                raise ValueError(f"{name}: a table calibration needs table_raw and table_eng")
+            if len(self.table_raw) != len(self.table_eng):
+                raise ValueError(f"{name}: table_raw and table_eng differ in length")
+            if any(a >= b for a, b in pairwise(self.table_raw)):
+                raise ValueError(f"{name}: table_raw must be strictly increasing")
+        if self.method == CalibrationMethod.IDENTITY and self.unit:
+            raise ValueError(f"{name}: an identity calibration cannot change the unit")
+        return self
+
+    def in_range(self, raw: float) -> bool:
+        """False when *raw* lies outside the calibration table."""
+        if self.method != CalibrationMethod.TABLE or not self.table_raw:
+            return True
+        return self.table_raw[0] <= raw <= self.table_raw[-1]
+
     def apply(self, raw: float) -> float:
         if self.method == CalibrationMethod.POLYNOMIAL:
-            if not self.coefficients:
-                return raw
             result = 0.0
-            for power, coeff in enumerate(self.coefficients):
+            for power, coeff in enumerate(self.coefficients or []):
                 result += coeff * (raw**power)
             return result
 
         if self.method == CalibrationMethod.TABLE:
-            if not self.table_raw or not self.table_eng:
-                return raw
-            return _interpolate(raw, self.table_raw, self.table_eng)
+            return _interpolate(raw, self.table_raw or [], self.table_eng or [])
 
         return raw
 
@@ -93,12 +113,15 @@ class CalibrationTransformer(Transformer[CalibrationConfig]):
                 continue
 
             calibrated: list[EngineeringParameter] = []
-            all_calibrated = True
             for sample in record.samples:
                 try:
                     raw = float(sample.raw_value)  # type: ignore[arg-type]
                 except (TypeError, ValueError):
-                    all_calibrated = False
+                    if cal.unit and sample.unit and cal.unit != sample.unit:
+                        raise ValueError(
+                            f"Parameter '{name}': {sample.raw_value!r} cannot be converted "
+                            f"from {sample.unit} to {cal.unit}, so one record would mix units"
+                        ) from None
                     if self.config.mark_uncalibrated_invalid:
                         sample = sample.model_copy(update={"validity": False})
                     calibrated.append(sample)
@@ -109,20 +132,20 @@ class CalibrationTransformer(Transformer[CalibrationConfig]):
                             "eng_value": cal.apply(raw),
                             "unit": cal.unit or sample.unit,
                             "calibration_id": cal.method.value,
+                            "out_of_limit": sample.out_of_limit or not cal.in_range(raw),
                         }
                     )
                 )
 
             object.__setattr__(record, "samples", calibrated)
-            # The record's unit stays true: samples that were not converted keep theirs.
-            if cal.unit and all_calibrated:
+            if cal.unit:
                 object.__setattr__(record, "unit", cal.unit)
 
         return dataset
 
 
 def _interpolate(x: float, xs: list[float], ys: list[float]) -> float:
-    """Linear interpolation / extrapolation over (xs, ys) point pairs."""
+    """Linear interpolation over (xs, ys) point pairs, held at the ends outside them."""
     if x <= xs[0]:
         return ys[0]
     if x >= xs[-1]:

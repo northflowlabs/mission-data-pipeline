@@ -3,13 +3,42 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass, field
 
 import pandas as pd
 
 from mdp.models.packet import TelemetryPacket
 from mdp.models.parameter import EngineeringParameter, ParameterRecord
+
+
+def exact_column(values: Sequence[object], index: Sequence[float] | None = None) -> pd.Series:
+    """A column that keeps each value exact: integers never pass through float64.
+
+    Raises ValueError for a mix of floats and integers that a float64 cannot hold.
+    """
+    numbers = [v for v in values if isinstance(v, (int, float)) and not isinstance(v, bool)]
+    if len(numbers) != len(values):
+        return pd.Series(list(values), index=index, dtype=object)
+    if all(isinstance(v, int) for v in numbers):
+        dtype = "UInt64" if numbers and max(numbers) >= 2**63 else "Int64"
+        return pd.Series(list(values), index=index, dtype=dtype)
+    if any(isinstance(v, int) and abs(v) > 2**53 for v in numbers):
+        raise ValueError("Integers beyond 2^53 cannot share a column with floats")
+    return pd.Series([float(v) for v in numbers], index=index, dtype="float64")
+
+
+def new_wide_times(wide: pd.DataFrame, seen: dict[str, set[float]]) -> None:
+    """Record the times of a wide batch, refusing a time a parameter already has."""
+    for name in wide.columns:
+        times = set(wide[name].dropna().index)
+        repeated = times & seen.setdefault(str(name), set())
+        if repeated:
+            raise ValueError(
+                f"Parameter '{name}' repeats time {min(repeated)} from an earlier batch; "
+                "use the per-parameter output"
+            )
+        seen[str(name)] |= times
 
 
 def _check_units(name: str, first: str | None, second: str | None) -> None:
@@ -90,7 +119,10 @@ class TelemetryDataset:
             }
             for s in record.samples
         ]
-        return pd.DataFrame(rows).sort_values(["time_tai", "seq_count"]).reset_index(drop=True)
+        frame = pd.DataFrame(rows)
+        frame["raw_value"] = pd.Series([s.raw_value for s in record.samples], dtype=object)
+        frame["eng_value"] = exact_column([s.eng_value for s in record.samples])
+        return frame.sort_values(["time_tai", "seq_count"]).reset_index(drop=True)
 
     def to_wide_dataframe(self) -> pd.DataFrame:
         """Return a wide DataFrame with one column per parameter, indexed by TAI time.
@@ -111,7 +143,7 @@ class TelemetryDataset:
                     f"Parameter '{name}' has several samples at one time; "
                     "use the per-parameter output"
                 )
-            frames[name] = pd.Series([s.eng_value for s in record.samples], index=times, name=name)
+            frames[name] = exact_column([s.eng_value for s in record.samples], index=times)
         if not frames:
             return pd.DataFrame()
         wide = pd.DataFrame(frames).sort_index()

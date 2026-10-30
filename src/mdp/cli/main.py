@@ -26,6 +26,8 @@ from mdp.observability.logging import configure_logging
 
 console = Console()
 
+EXIT_DATA_LOST = 3  # the run finished, but data was lost; see the summary
+
 
 @click.group()
 @click.option(
@@ -181,7 +183,15 @@ def inspect(file: Path, max_packets: int, apid: tuple[int, ...]) -> None:
     default=False,
     help="Extract and transform only; skip loading.",
 )
-@click.option("--max-batches", default=None, type=int, help="Stop after N batches.")
+@click.option(
+    "--max-batches", default=None, type=click.IntRange(min=1), help="Stop after N batches."
+)
+@click.option(
+    "--strict",
+    is_flag=True,
+    default=False,
+    help="Treat data losses, such as skipped frames, as a failed run.",
+)
 def run(
     extractor_name: str,
     loader_name: str | None,
@@ -192,8 +202,10 @@ def run(
     pipeline_name: str,
     dry_run: bool,
     max_batches: int | None,
+    strict: bool,
 ) -> None:
     """Run a pipeline from the command line using registered plugins."""
+    from mdp.core.base import StageStatus
     from mdp.core.pipeline import Pipeline, PipelineConfig
     from mdp.core.registry import registry
 
@@ -220,6 +232,7 @@ def run(
             name=pipeline_name,
             dry_run=dry_run,
             max_batches=max_batches,
+            strict=strict,
         ),
         extractor=extractor,
         transformers=transformers,
@@ -229,7 +242,7 @@ def run(
     result = pipeline.run()
     console.print(result.summary())
 
-    if not result.ok:
+    if result.status == StageStatus.FAILED:
         sys.exit(1)
 
     if loader is not None and result.total_samples == 0:
@@ -239,6 +252,9 @@ def run(
             "decodes them; see --transformer-config."
         )
         sys.exit(1)
+
+    if result.status == StageStatus.DEGRADED:
+        sys.exit(EXIT_DATA_LOST)
 
 
 def _parse_transformer_configs(

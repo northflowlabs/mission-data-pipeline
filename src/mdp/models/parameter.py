@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from enum import Enum
 from typing import Annotated
 
@@ -71,7 +72,7 @@ class ParameterRecord(BaseModel):
 
     @property
     def time_range(self) -> tuple[float, float] | None:
-        if not self.samples:
+        times = [s.sample_time_tai for s in self.samples if not math.isnan(s.sample_time_tai)]
+        if not times:
             return None
-        times = [s.sample_time_tai for s in self.samples]
         return min(times), max(times)

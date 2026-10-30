@@ -6,6 +6,7 @@ merged on TAI time.
 
 from __future__ import annotations
 
+import io
 from pathlib import Path
 
 import pandas as pd
@@ -13,7 +14,7 @@ from pydantic import BaseModel, Field
 
 from mdp.core.base import Loader
 from mdp.core.registry import registry
-from mdp.models.dataset import TelemetryDataset
+from mdp.models.dataset import TelemetryDataset, new_wide_times
 
 
 class CsvLoaderConfig(BaseModel):
@@ -33,9 +34,11 @@ class CsvLoader(Loader[CsvLoaderConfig]):
     def __init__(self, config: CsvLoaderConfig) -> None:
         super().__init__(config)
         self._written: set[Path] = set()
+        self._wide_times: dict[str, set[float]] = {}
 
     def begin_run(self) -> None:
         self._written.clear()
+        self._wide_times.clear()
 
     def setup(self) -> None:
         self.config.output_dir.mkdir(parents=True, exist_ok=True)
@@ -69,14 +72,18 @@ class CsvLoader(Loader[CsvLoaderConfig]):
         df = dataset.to_wide_dataframe()
         if df.empty:
             return
+        new_wide_times(df, self._wide_times)
         out_path = self.config.output_dir / "telemetry.csv"
         units = df.attrs.get("units", {})
         wide = df.reset_index().rename(columns={"index": "time_tai"})
         wide = wide.rename(columns={name: f"{name} [{unit}]" for name, unit in units.items()})
         keep_existing = out_path in self._written or not self.config.overwrite
         if keep_existing and out_path.exists():
-            existing = pd.read_csv(out_path, sep=self.config.delimiter)
-            wide = pd.concat([existing, wide], ignore_index=True)
+            # Everything goes through text, so "007" and long integers stay as written
+            existing = pd.read_csv(
+                out_path, sep=self.config.delimiter, dtype=str, keep_default_na=False
+            )
+            wide = pd.concat([existing, self._as_text(wide)], ignore_index=True).fillna("")
         wide.to_csv(
             out_path,
             index=False,
@@ -84,3 +91,11 @@ class CsvLoader(Loader[CsvLoaderConfig]):
             float_format=self.config.float_format,
         )
         self._written.add(out_path)
+
+    def _as_text(self, frame: pd.DataFrame) -> pd.DataFrame:
+        text = frame.to_csv(
+            index=False, sep=self.config.delimiter, float_format=self.config.float_format
+        )
+        return pd.read_csv(
+            io.StringIO(text), sep=self.config.delimiter, dtype=str, keep_default_na=False
+        )

@@ -14,14 +14,13 @@ stream of CCSDS Space Packets (no framing).  Each packet starts with a
 A stream that stops making sense is an error, not the end of the data: an invalid
 header or a truncated packet raises ``ValueError`` with its byte offset. With
 ``frame_sync`` the extractor can recover, so it moves on to the next sync marker and
-counts the frame in the batch's ``skipped_frames`` metadata.
+counts the frame in the batch's ``skipped_frames`` metadata. A frame may hold several
+packets: they are read until the next marker or the end of the file.
 """
 
 from __future__ import annotations
 
-import io
 import struct
-import time
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Annotated
@@ -42,6 +41,7 @@ class BinaryExtractorConfig(BaseModel):
     batch_size: Annotated[int, Field(gt=0)] = 256
     apid_filter: list[int] | None = Field(
         default=None,
+        min_length=1,
         description="If set, only yield packets whose APID is in this list",
     )
     sec_hdr_length: Annotated[int, Field(ge=0)] = Field(
@@ -70,59 +70,48 @@ class BinaryPacketExtractor(Extractor[BinaryExtractorConfig]):
         if not path.exists():
             raise FileNotFoundError(f"Telemetry file not found: {path}")
 
-        grt = self.config.ground_receipt_time or time.time()
-
         with open(path, "rb") as fh:
-            buffer = io.BytesIO(fh.read())
+            data = fh.read()
 
-        yield from self._parse_buffer(buffer, grt)
+        yield from self._parse(data)
 
-    def _parse_buffer(
-        self, buffer: io.BytesIO, ground_receipt_time: float
-    ) -> Iterator[TelemetryDataset]:
+    def _parse(self, data: bytes) -> Iterator[TelemetryDataset]:
+        sync = self.config.frame_sync
         dataset = self._new_dataset()
         count = 0
         skipped_frames = 0
 
-        while True:
-            if self.config.frame_sync:
-                if not self._seek_to_sync(buffer):
-                    break
-                buffer.read(4)
+        offset = 0
+        if sync:
+            first = data.find(SYNC_MARKER)
+            offset = first + len(SYNC_MARKER) if first >= 0 else len(data)
 
-            offset = buffer.tell()
-            header_bytes = buffer.read(CCSDS_HEADER_SIZE)
-            if not header_bytes:
-                break
+        while offset < len(data):
+            if sync and data.startswith(SYNC_MARKER, offset):
+                offset += len(SYNC_MARKER)
+                continue
 
             try:
-                header = CCSDSPrimaryHeader.from_bytes(header_bytes)
-            except (struct.error, ValueError) as exc:
-                if self.config.frame_sync:
-                    skipped_frames += 1
-                    continue
-                raise ValueError(
-                    f"Invalid CCSDS header at byte {offset} of {self.config.path}: "
-                    f"{header_bytes.hex()}"
-                ) from exc
+                packet_bytes, header = self._read_packet(data, offset)
+            except ValueError:
+                if not sync:
+                    raise
+                skipped_frames += 1
+                next_sync = data.find(SYNC_MARKER, offset + 1)
+                if next_sync < 0:
+                    break
+                offset = next_sync + len(SYNC_MARKER)
+                continue
 
-            data_field = buffer.read(header.packet_data_length)
-            if len(data_field) < header.packet_data_length:
-                if self.config.frame_sync:
-                    skipped_frames += 1
-                    continue
-                raise ValueError(
-                    f"Truncated packet at byte {offset} of {self.config.path}: "
-                    f"expected {header.packet_data_length} data bytes, got {len(data_field)}"
-                )
+            offset += len(packet_bytes)
 
             if self.config.apid_filter and header.apid not in self.config.apid_filter:
                 continue
 
             packet = TelemetryPacket.from_bytes(
-                header_bytes + data_field,
+                packet_bytes,
                 sec_hdr_length=self.config.sec_hdr_length,
-                ground_receipt_time=ground_receipt_time,
+                ground_receipt_time=self.config.ground_receipt_time,
                 source_id=self.config.source_id,
             )
             dataset.add_packet(packet)
@@ -139,18 +128,23 @@ class BinaryPacketExtractor(Extractor[BinaryExtractorConfig]):
             dataset.metadata["skipped_frames"] = skipped_frames
             yield dataset
 
+    def _read_packet(self, data: bytes, offset: int) -> tuple[bytes, CCSDSPrimaryHeader]:
+        header_bytes = data[offset : offset + CCSDS_HEADER_SIZE]
+        try:
+            header = CCSDSPrimaryHeader.from_bytes(header_bytes)
+        except (struct.error, ValueError) as exc:
+            raise ValueError(
+                f"Invalid CCSDS header at byte {offset} of {self.config.path}: {header_bytes.hex()}"
+            ) from exc
+
+        end = offset + CCSDS_HEADER_SIZE + header.packet_data_length
+        if end > len(data):
+            raise ValueError(
+                f"Truncated packet at byte {offset} of {self.config.path}: expected "
+                f"{header.packet_data_length} data bytes, "
+                f"got {len(data) - offset - CCSDS_HEADER_SIZE}"
+            )
+        return data[offset:end], header
+
     def _new_dataset(self) -> TelemetryDataset:
         return TelemetryDataset(metadata={"source": str(self.config.path), "extractor": "binary"})
-
-    @staticmethod
-    def _seek_to_sync(buffer: io.BytesIO) -> bool:
-        """Advance the buffer position to the next 0x1ACFFC1D sync marker."""
-        while True:
-            byte = buffer.read(1)
-            if not byte:
-                return False
-            if byte == b"\x1a":
-                candidate = byte + buffer.read(3)
-                if candidate == SYNC_MARKER:
-                    buffer.seek(-4, io.SEEK_CUR)
-                    return True

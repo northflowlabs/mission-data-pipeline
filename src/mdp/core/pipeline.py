@@ -22,8 +22,8 @@ from mdp.observability.metrics import PipelineMetrics
 log = structlog.get_logger(__name__)
 
 # Dataset metadata counters that mean data was lost: skipped_frames from the binary
-# extractor, short_packets from decom.
-_DATA_ISSUES = ("skipped_frames", "short_packets")
+# extractor, short_packets from decom, skipped_rows and empty_cells from the CSV extractor.
+_DATA_ISSUES = ("skipped_frames", "short_packets", "skipped_rows", "empty_cells")
 
 
 @dataclass
@@ -34,7 +34,12 @@ class PipelineConfig:
     stop_on_error: bool = True
     max_batches: int | None = None
     dry_run: bool = False
+    strict: bool = False  # treat data losses as a failed run
     extra: dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if self.max_batches is not None and self.max_batches < 1:
+            raise ValueError("max_batches must be at least 1, or None for no limit")
 
 
 @dataclass
@@ -137,7 +142,14 @@ class Pipeline:
         if self.loader:
             self.loader.begin_run()
 
+        stages: list[Any] = [self.extractor, *self.transformers]
+        if self.loader and not self.config.dry_run:
+            stages.append(self.loader)
+
         try:
+            for stage in stages:
+                stage._start()
+
             for dataset in self.extractor.extract():
                 batch_log = log.bind(batch=batches, packets=len(dataset))
                 batch_log.debug("pipeline.batch.extracted")
@@ -152,7 +164,8 @@ class Pipeline:
                     count = dataset.metadata.get(issue)
                     if isinstance(count, int) and count:
                         data_issues[issue] = data_issues.get(issue, 0) + count
-                self.hooks.fire("batch.transformed", dataset)
+                if not t_errors:
+                    self.hooks.fire("batch.transformed", dataset)
 
                 if t_errors and self.config.stop_on_error:
                     log.error("pipeline.stopped_on_error", stage=t_errors[0])
@@ -184,8 +197,21 @@ class Pipeline:
             log.exception("pipeline.unhandled_error", error=str(exc))
             self.hooks.fire("stage.error", self.extractor.name, exc)
 
+        for stage in stages:
+            try:
+                stage._stop()
+            except Exception as exc:
+                errors.append(exc)
+                log.exception("pipeline.teardown_error", stage=stage.name, error=str(exc))
+                self.hooks.fire("stage.error", stage.name, exc)
+
         elapsed = time.perf_counter() - t0
-        status = StageStatus.SUCCESS if not errors else StageStatus.FAILED
+        if errors or (data_issues and self.config.strict):
+            status = StageStatus.FAILED
+        elif data_issues:
+            status = StageStatus.DEGRADED
+        else:
+            status = StageStatus.SUCCESS
 
         result = PipelineResult(
             pipeline_name=self.config.name,

@@ -31,6 +31,7 @@ class StageStatus(str, Enum):
     PENDING = "pending"
     RUNNING = "running"
     SUCCESS = "success"
+    DEGRADED = "degraded"  # finished, but data was lost on the way
     FAILED = "failed"
     SKIPPED = "skipped"
 
@@ -64,6 +65,7 @@ class PipelineStage(abc.ABC, Generic[ConfigT]):
     def __init__(self, config: ConfigT) -> None:
         self.config = config
         self._name = self.__class__.__name__
+        self._started = False
 
     @property
     def name(self) -> str:
@@ -77,6 +79,17 @@ class PipelineStage(abc.ABC, Generic[ConfigT]):
 
     def teardown(self) -> None:
         """Called once after the stage completes, even on error."""
+
+    def _start(self) -> None:
+        if not self._started:
+            self.validate_config()
+            self.setup()
+            self._started = True
+
+    def _stop(self) -> None:
+        if self._started:
+            self._started = False
+            self.teardown()
 
 
 # --------------------------------------------------------------------------- #
@@ -100,36 +113,6 @@ class Extractor(PipelineStage[ConfigT]):
         for ds in self.extract():
             yield ds
 
-    def _timed_extract(self) -> Iterator[tuple[TelemetryDataset, StageResult]]:
-        t0 = time.perf_counter()
-        try:
-            self.setup()
-            for ds in self.extract():
-                elapsed = time.perf_counter() - t0
-                yield (
-                    ds,
-                    StageResult(
-                        stage_name=self.name,
-                        status=StageStatus.SUCCESS,
-                        elapsed_s=elapsed,
-                        records_out=len(ds),
-                    ),
-                )
-        except Exception as exc:
-            elapsed = time.perf_counter() - t0
-            yield (
-                TelemetryDataset(),
-                StageResult(
-                    stage_name=self.name,
-                    status=StageStatus.FAILED,
-                    elapsed_s=elapsed,
-                    error=exc,
-                ),
-            )
-            raise
-        finally:
-            self.teardown()
-
 
 # --------------------------------------------------------------------------- #
 #  Transformer                                                                  #
@@ -151,7 +134,7 @@ class Transformer(PipelineStage[ConfigT]):
         t0 = time.perf_counter()
         records_in = len(dataset)
         try:
-            self.setup()
+            self._start()
             result = self.transform(dataset)
             elapsed = time.perf_counter() - t0
             return result, StageResult(
@@ -170,8 +153,6 @@ class Transformer(PipelineStage[ConfigT]):
                 records_in=records_in,
                 error=exc,
             )
-        finally:
-            self.teardown()
 
 
 # --------------------------------------------------------------------------- #
@@ -193,7 +174,7 @@ class Loader(PipelineStage[ConfigT]):
         t0 = time.perf_counter()
         records_in = len(dataset)
         try:
-            self.setup()
+            self._start()
             self.load(dataset)
             elapsed = time.perf_counter() - t0
             return StageResult(
@@ -212,5 +193,3 @@ class Loader(PipelineStage[ConfigT]):
                 records_in=records_in,
                 error=exc,
             )
-        finally:
-            self.teardown()

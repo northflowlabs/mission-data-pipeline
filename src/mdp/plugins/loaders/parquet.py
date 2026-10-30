@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field
 
 from mdp.core.base import Loader
 from mdp.core.registry import registry
-from mdp.models.dataset import TelemetryDataset
+from mdp.models.dataset import TelemetryDataset, new_wide_times
 
 _UNITS_KEY = b"mdp_units"
 
@@ -35,6 +35,13 @@ class ParquetLoaderConfig(BaseModel):
     overwrite: bool = True
 
 
+def _same_units(earlier: dict[str, str], later: dict[str, str]) -> dict[str, str]:
+    for name, unit in later.items():
+        if earlier.get(name, unit) != unit:
+            raise ValueError(f"Parameter '{name}' mixes units: {earlier[name]} and {unit}")
+    return {**earlier, **later}
+
+
 @registry.loader("parquet")
 class ParquetLoader(Loader[ParquetLoaderConfig]):
     """Write TelemetryDataset parameters to Parquet files."""
@@ -44,9 +51,11 @@ class ParquetLoader(Loader[ParquetLoaderConfig]):
     def __init__(self, config: ParquetLoaderConfig) -> None:
         super().__init__(config)
         self._written: set[Path] = set()
+        self._wide_times: dict[str, set[float]] = {}
 
     def begin_run(self) -> None:
         self._written.clear()
+        self._wide_times.clear()
 
     def setup(self) -> None:
         self.config.output_dir.mkdir(parents=True, exist_ok=True)
@@ -75,6 +84,7 @@ class ParquetLoader(Loader[ParquetLoaderConfig]):
         df = dataset.to_wide_dataframe()
         if df.empty:
             return
+        new_wide_times(df, self._wide_times)
         self._write_df(
             df.reset_index().rename(columns={"index": "time_tai"}),
             self.config.output_dir / "telemetry.parquet",
@@ -91,9 +101,12 @@ class ParquetLoader(Loader[ParquetLoaderConfig]):
             existing = pq.read_table(path)
             # An integer column can meet floats in a later batch; permissive widens it.
             table = pa.concat_tables([existing, table], promote_options="permissive")
+            # The stored pandas types describe the first batch, not the widened column
+            kept = {k: v for k, v in (table.schema.metadata or {}).items() if k != b"pandas"}
+            table = table.replace_schema_metadata(kept)
             old_units = (existing.schema.metadata or {}).get(_UNITS_KEY)
             if old_units:
-                units = {**json.loads(old_units), **(units or {})}
+                units = _same_units(json.loads(old_units), units or {})
         if units:
             metadata = {**(table.schema.metadata or {}), _UNITS_KEY: json.dumps(units)}
             table = table.replace_schema_metadata(metadata)
