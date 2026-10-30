@@ -345,7 +345,7 @@ pytest -v --cov=mdp --cov-report=term-missing
 pytest tests/test_models_packet.py -v
 ```
 
-Current coverage: **92% overall**.
+Current coverage: **94% overall**.
 
 ## Roadmap
 

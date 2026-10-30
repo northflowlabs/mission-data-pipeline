@@ -9,7 +9,8 @@ satellite, recorded on 25 March 2022 (see examples/data/README.md).
   4. Convert GPS seconds to hours of the GPS week with a polynomial
   5. Store the result as Parquet files, one per parameter
 
-The two clocks in each packet agree, which is how these offsets were confirmed.
+The two clocks in each of these packets agree to within 0.37 to 0.44 s, which is how
+these offsets were confirmed.
 
 Run this script from the project root::
 

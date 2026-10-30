@@ -57,7 +57,8 @@ mdp run \
 | `--loader-config` | JSON file with the loader config |
 | `--pipeline-name` | Run label, default `mdp-run` |
 | `--dry-run` | Extract and transform only, write nothing |
-| `--max-batches` | Stop after this many batches |
+| `--max-batches` | Stop after this many batches, at least 1 |
+| `--strict` | Treat data losses as a failed run |
 
 The JSON files hold the fields of each stage's config model:
 
@@ -75,4 +76,4 @@ The JSON files hold the fields of each stage's config model:
 
 Binary packets carry no parameters until `decom` decodes them.
 
-The command exits with status 1 when the run fails, and when a run gives the loader nothing to write.
+The command exits with status 1 when the run fails, and when a run gives the loader nothing to write. It exits with status 3 when the run finished but lost data, as `summary()` shows.

@@ -10,6 +10,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ## [Unreleased]
 
 ### Changed
+- A run that lost data has the status `degraded`, and `mdp run` exits with status 3. `strict` and `--strict` make it a failed run
+- Refused at validation: `apid_filter=[]`, `parameter_columns=[]`, `max_batches=0`, unsorted calibration tables, polynomial or table calibrations without their definition, and identity calibrations that change the unit
 - `HDF5LoaderConfig.mode` defaults to `"w"`: a rerun replaces the file, as with Parquet and CSV. `"a"` keeps earlier runs
 - `BinaryPacketExtractor` raises `ValueError` on an invalid header or a truncated packet. It used to stop or skip without saying so. With `frame_sync` it moves on and counts `skipped_frames`
 - CCSDS headers with a version other than 0 are rejected
@@ -18,12 +20,21 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - `CsvLoaderConfig.float_format` defaults to `%.17g`, which keeps small values
 
 ### Fixed
+- `frame_sync` finds a marker right after a stray 0x1A, and reads every packet of a multi-packet frame
+- `BinaryPacketExtractor` leaves `ground_receipt_time` empty unless configured, instead of filling it with the wall clock
+- The CSV extractor reads cells as text and converts them by `parameter_types`, so long integers and "007" survive. Short rows count in `skipped_rows` and empty cells in `empty_cells`
+- Wide outputs keep integers exact, wide CSV keeps text as written across batches, and a repeated time across batches raises
+- Mixed units raise in HDF5 and wide Parquet instead of relabelling earlier values
+- `Pipeline` runs `validate_config()`, `setup()` and `teardown()` for every stage, once per run
+- `batch.transformed` no longer fires after a failed transformer
+- `ParameterRecord.time_range` ignores missing times
+- Table calibrations flag values outside the table as `out_of_limit`
 - HDF5 stores values by their type: text that looks like a number stays text, and 64-bit integers keep every digit
 - `FLOAT` and `DOUBLE` parameters with the wrong length are refused at validation
 - Packets too short for a parameter are counted in `short_packets`, and `frame_sync` losses in `skipped_frames`. Both reach `PipelineResult.data_issues` and `summary()`
-- `time_tai` is documented and computed as TAI seconds since J2000.0 (12:00 TT). The examples used an epoch 32.184 s late
+- `time_tai` is documented and computed as TAI seconds since J2000.0 (12:00 TT). The examples used an epoch 64.184 s late
 - `mark_uncalibrated_invalid` works
-- Mixing units for one parameter raises, and a record's unit changes only when all its samples were converted. Wide Parquet and CSV output carries units
+- Mixing units for one parameter raises, including when calibration cannot convert a sample. Wide Parquet and CSV output carries units
 - Parquet widens an integer column that meets floats in a later batch
 - JSON config files are read as UTF-8
 - `mdp` and console logging work on Windows from a plain install: `colorama` is a dependency there
@@ -109,7 +120,6 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Standards compliance
 - CCSDS 133.0-B-2 (Space Packet Protocol): primary header model and parser
 - CCSDS 132.0-B-3 (TM Space Data Link Protocol): transfer frame model and parser
-- CCSDS 301.0-B-4 (Time Code Formats): TAI/J2000 epoch convention
 - ECSS-E-ST-70-41C (TM/TC Packet Utilization): decommutation model and MIB conventions
 
 ---

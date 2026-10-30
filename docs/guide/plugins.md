@@ -53,13 +53,14 @@ class DropEmptyTransformer(Transformer[DropEmptyConfig]):
     config_class = DropEmptyConfig
 
     def transform(self, dataset: TelemetryDataset) -> TelemetryDataset:
-        out = TelemetryDataset()
+        # Keep the parameters and metadata: loss counters travel in the metadata
+        out = TelemetryDataset(parameters=dataset.parameters, metadata=dataset.metadata)
         for packet in dataset.packets:
             if len(packet.user_data) >= self.config.min_bytes:
                 out.add_packet(packet)
         return out
 ```
 
-The required methods are `extract()` for an extractor (a generator of `TelemetryDataset`), `transform(dataset)` for a transformer and `load(dataset)` for a loader. `setup()`, `teardown()` and `validate_config()` are optional.
+The required methods are `extract()` for an extractor (a generator of `TelemetryDataset`), `transform(dataset)` for a transformer and `load(dataset)` for a loader. `validate_config()`, `setup()` and `teardown()` are optional. A pipeline calls the first two once per run before the first batch, and `teardown()` once at the end, even after an error.
 
 Look up a registered class by name with `registry.get_extractor(name)`, `registry.get_transformer(name)` or `registry.get_loader(name)`.

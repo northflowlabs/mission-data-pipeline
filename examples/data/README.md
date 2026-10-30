@@ -6,7 +6,7 @@ Both files are real telemetry from spacecraft in orbit.
 
 The first 101 CCSDS Space Packets of a Level 0 file from the NASA CYGNSS F7 satellite, recorded on 25 March 2022, 7 APIDs in all. Taken unchanged from the test data of [CCSDSPy](https://github.com/ddasilva/ccsdspy) (`ccsdspy/tests/data/split/`).
 
-The packets of APID 1313 carry the GPS week and GPS seconds as little-endian fields at user data offsets 4 and 6. Each value agrees with the UTC time in the same packet's secondary header. The example decodes those two fields only, because the rest of this packet's layout is not published with the data.
+The packets of APID 1313 carry the GPS week and GPS seconds as little-endian fields at user data offsets 4 and 6. Each value agrees with the UTC time in the same packet's secondary header to within 0.37 to 0.44 s. The example decodes those two fields only, because the rest of this packet's layout is not published with the data.
 
 CCSDSPy is Copyright (c) 2018, Daniel da Silva, under the BSD 3-Clause licence, reproduced in [LICENSE-CCSDSPy.rst](LICENSE-CCSDSPy.rst).
 
