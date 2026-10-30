@@ -24,9 +24,10 @@ Each stage is constructed with an instance of its Pydantic config model, so inva
 
 `Pipeline.run()` returns a `PipelineResult`:
 
-- `status`: `StageStatus.SUCCESS` or `StageStatus.FAILED`
+- `status`: `StageStatus.SUCCESS`, `StageStatus.DEGRADED` (finished, but data was lost) or `StageStatus.FAILED`
 - `ok`: True when the status is success
-- `elapsed_s`, `batches_processed`, `total_packets`
+- `elapsed_s`, `batches_processed`, `total_packets`, `total_samples`
+- `data_issues`: counts of data lost, and `stream_notes`: counts of fill and idle packets
 - `stage_results`: one `StageResult` per transformer and loader call, with records in and out, elapsed time and any error
 - `errors`: the exceptions collected during the run
 - `summary()`: a plain text summary

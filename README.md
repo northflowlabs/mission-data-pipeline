@@ -265,6 +265,10 @@ dataset.to_wide_dataframe()              # wide pd.DataFrame, indexed by TAI, un
 dataset.merge(other_dataset)             # non-destructive merge
 ```
 
+## Reading CSV telemetry
+
+`CsvExtractorConfig.parameter_types` declares a column's type, such as `{"mode": "string", "counter": "uint"}`. Cells are read as text and converted by that type, so integers keep every digit. Without a declaration, a cell written as a plain number becomes one, and anything else, such as `007`, stays text. A row with too many or too few cells is skipped and counted, never shifted.
+
 ## Extending MDP
 
 ### Register a custom Extractor

@@ -17,8 +17,8 @@ Built-in stages register themselves by name in `mdp.core.registry.registry` when
 
 ### Extractors
 
-- `binary` reads a raw CCSDS packet stream. Options: `path`, `batch_size` (256), `apid_filter`, `sec_hdr_length` (0), `frame_sync` (scan for the 0x1ACFFC1D marker), `source_id`, `ground_receipt_time`.
-- `csv` reads engineering values from CSV. Options: `path`, `batch_size` (1000), `time_column`, `apid_column`, `seq_count_column`, `parameter_columns`, `delimiter`, `source_id`.
+- `binary` reads a raw CCSDS packet stream. Options: `path`, `batch_size` (256), `apid_filter`, `sec_hdr_length` (0), `frame_sync` (scan for the 0x1ACFFC1D marker), `source_id`, `ground_receipt_time`. With `frame_sync`, a frame runs from one marker to the next and may hold several packets. A marker inside a packet is accepted as payload only if the packet ends at another marker or the end of the file; otherwise the frame is skipped and counted. Bytes before the first marker count in `lead_in_bytes`, a file with no marker fails, and fill and idle packets count in `fill_bytes` and `idle_packets`.
+- `csv` reads engineering values from CSV. Options: `path`, `batch_size` (1000), `time_column`, `apid_column`, `seq_count_column`, `parameter_columns`, `parameter_types`, `delimiter`, `source_id`. `parameter_types` maps a column to a `ParameterType`, such as `{"mode": "string", "counter": "uint"}`; cells are read as text and converted by it, and an undeclared cell written as a plain number becomes one. `source_id` goes into the dataset metadata. A row of the wrong width is counted in `wrong_width_rows`, never shifted.
 
 ### Transformers
 

@@ -21,6 +21,9 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 - `frame_sync` finds a marker right after a stray 0x1A, and reads every packet of a multi-packet frame
+- `frame_sync` counts bytes before the first marker in `lead_in_bytes`, fails a file with no marker, skips a packet whose length crosses a marker unless it ends exactly at the next marker or the end of the file, and treats fill and idle packets as `fill_bytes` and `idle_packets` instead of phantom packets
+- A CSV row of the wrong width is counted in `wrong_width_rows`, never shifted, and a trailing delimiter is handled. Cells such as `E1`, `e5` and `-` stay text. `source_id` reaches the dataset metadata
+- `mdp inspect --max-packets 0` is a clean error
 - `BinaryPacketExtractor` leaves `ground_receipt_time` empty unless configured, instead of filling it with the wall clock
 - The CSV extractor reads cells as text and converts them by `parameter_types`, so long integers and "007" survive. Short rows count in `skipped_rows` and empty cells in `empty_cells`
 - Wide outputs keep integers exact, wide CSV keeps text as written across batches, and a repeated time across batches raises
@@ -34,7 +37,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - Packets too short for a parameter are counted in `short_packets`, and `frame_sync` losses in `skipped_frames`. Both reach `PipelineResult.data_issues` and `summary()`
 - `time_tai` is documented and computed as TAI seconds since J2000.0 (12:00 TT). The examples used an epoch 64.184 s late
 - `mark_uncalibrated_invalid` works
-- Mixing units for one parameter raises, including when calibration cannot convert a sample. Wide Parquet and CSV output carries units
+- Mixing units for one parameter raises, including when calibration cannot convert a sample, and a sample with no unit does not mix with one that has a unit. Wide Parquet and CSV output carries units
 - Parquet widens an integer column that meets floats in a later batch
 - JSON config files are read as UTF-8
 - `mdp` and console logging work on Windows from a plain install: `colorama` is a dependency there
