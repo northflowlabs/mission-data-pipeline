@@ -150,7 +150,7 @@ class TestLossesReachTheResult:
 
     def test_frame_sync_losses_are_in_the_result(self, tmp_path: Path) -> None:
         sync = b"\x1a\xcf\xfc\x1d"
-        path = _binary_file(tmp_path, sync + b"\xff" * 6, sync + make_raw_packet())
+        path = _binary_file(tmp_path, sync + b"\xfe\xfd" * 3, sync + make_raw_packet())
         result = Pipeline(
             PipelineConfig(name="x"),
             BinaryPacketExtractor(BinaryExtractorConfig(path=path, frame_sync=True)),

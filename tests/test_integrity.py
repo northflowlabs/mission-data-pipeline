@@ -69,7 +69,7 @@ class TestBadStreams:
     def test_frame_sync_recovers_and_counts_what_it_skipped(self, tmp_path: Path) -> None:
         sync = b"\x1a\xcf\xfc\x1d"
         path = tmp_path / "t.bin"
-        path.write_bytes(sync + b"\xff" * 6 + sync + make_raw_packet())
+        path.write_bytes(sync + b"\xfe\xfd" * 3 + sync + make_raw_packet())
         batches = _extract(path, frame_sync=True)
         assert len(batches[0]) == 1
         assert batches[0].metadata["skipped_frames"] == 1

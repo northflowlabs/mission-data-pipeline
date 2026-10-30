@@ -268,7 +268,7 @@ class TestExactWideOutput:
 
 class TestRunStatus:
     def _lossy(self, tmp_path: Path, strict: bool = False):
-        path = _write(tmp_path, SYNC + b"\xff" * 6 + SYNC + make_raw_packet())
+        path = _write(tmp_path, SYNC + b"\xfe\xfd" * 3 + SYNC + make_raw_packet())
         extractor = BinaryPacketExtractor(BinaryExtractorConfig(path=path, frame_sync=True))
         return Pipeline(PipelineConfig(name="x", strict=strict), extractor).run()
 
@@ -281,7 +281,7 @@ class TestRunStatus:
         assert self._lossy(tmp_path, strict=True).status == StageStatus.FAILED
 
     def _run_cli(self, tmp_path: Path, *extra: str):
-        path = _write(tmp_path, SYNC + b"\xff" * 6 + SYNC + make_raw_packet())
+        path = _write(tmp_path, SYNC + b"\xfe\xfd" * 3 + SYNC + make_raw_packet())
         config = tmp_path / "e.json"
         config.write_text(f'{{"path": "{path.as_posix()}", "frame_sync": true}}', encoding="utf-8")
         args = ["run", "--extractor", "binary", "--extractor-config", str(config), *extra]
