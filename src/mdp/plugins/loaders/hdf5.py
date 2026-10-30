@@ -53,11 +53,21 @@ class HDF5Loader(Loader[HDF5LoaderConfig]):
 
     config_class = HDF5LoaderConfig
 
+    def __init__(self, config: HDF5LoaderConfig) -> None:
+        super().__init__(config)
+        self._opened = False
+
+    def begin_run(self) -> None:
+        self._opened = False
+
     def setup(self) -> None:
         self.config.path.parent.mkdir(parents=True, exist_ok=True)
 
     def load(self, dataset: TelemetryDataset) -> None:
-        with h5py.File(self.config.path, self.config.mode) as hf:
+        # mode applies to the file as a whole: "w" must not truncate between batches.
+        mode = "a" if self._opened else self.config.mode
+        with h5py.File(self.config.path, mode) as hf:
+            self._opened = True
             root = hf.require_group(_ROOT_GROUP)
 
             for name in dataset.parameter_names():

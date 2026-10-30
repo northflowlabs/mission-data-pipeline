@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pandas as pd
 from pydantic import BaseModel, Field
 
 from mdp.core.base import Loader
@@ -29,6 +30,13 @@ class CsvLoader(Loader[CsvLoaderConfig]):
 
     config_class = CsvLoaderConfig
 
+    def __init__(self, config: CsvLoaderConfig) -> None:
+        super().__init__(config)
+        self._written: set[Path] = set()
+
+    def begin_run(self) -> None:
+        self._written.clear()
+
     def setup(self) -> None:
         self.config.output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -44,25 +52,33 @@ class CsvLoader(Loader[CsvLoaderConfig]):
             if df.empty:
                 continue
             out_path = self.config.output_dir / f"{name}.csv"
-            mode = "w" if self.config.overwrite or not out_path.exists() else "a"
-            header = mode == "w"
+            # overwrite replaces earlier runs; batches of the same run accumulate.
+            keep_existing = out_path in self._written or not self.config.overwrite
+            mode = "a" if keep_existing and out_path.exists() else "w"
             df.to_csv(
                 out_path,
                 mode=mode,
-                header=header,
+                header=mode == "w",
                 index=False,
                 sep=self.config.delimiter,
                 float_format=self.config.float_format,
             )
+            self._written.add(out_path)
 
     def _write_wide(self, dataset: TelemetryDataset) -> None:
         df = dataset.to_wide_dataframe()
         if df.empty:
             return
         out_path = self.config.output_dir / "telemetry.csv"
-        df.reset_index().rename(columns={"index": "time_tai"}).to_csv(
+        wide = df.reset_index().rename(columns={"index": "time_tai"})
+        keep_existing = out_path in self._written or not self.config.overwrite
+        if keep_existing and out_path.exists():
+            existing = pd.read_csv(out_path, sep=self.config.delimiter)
+            wide = pd.concat([existing, wide], ignore_index=True)
+        wide.to_csv(
             out_path,
             index=False,
             sep=self.config.delimiter,
             float_format=self.config.float_format,
         )
+        self._written.add(out_path)

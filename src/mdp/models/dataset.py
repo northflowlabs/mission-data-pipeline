@@ -60,6 +60,10 @@ class TelemetryDataset:
     #  DataFrame export                                                     #
     # ------------------------------------------------------------------ #
 
+    def sample_count(self) -> int:
+        """Total parameter samples held across all parameters."""
+        return sum(len(self.parameters[name].samples) for name in self.parameters)
+
     def to_dataframe(self, parameter_name: str) -> pd.DataFrame:
         """Return a tidy DataFrame for a single parameter time-series."""
         record = self.parameters.get(parameter_name)

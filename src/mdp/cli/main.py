@@ -166,6 +166,13 @@ def inspect(file: Path, max_packets: int, apid: tuple[int, ...]) -> None:
     multiple=True,
     help="Transformer plugin names (repeatable, applied in order).",
 )
+@click.option(
+    "--transformer-config",
+    "transformer_configs",
+    multiple=True,
+    metavar="NAME=FILE",
+    help="JSON config for a transformer, e.g. decom=decom.json (repeatable).",
+)
 @click.option("--pipeline-name", default="mdp-run", show_default=True)
 @click.option(
     "--dry-run",
@@ -180,6 +187,7 @@ def run(
     extractor_config: Path | None,
     loader_config: Path | None,
     transformer_names: tuple[str, ...],
+    transformer_configs: tuple[str, ...],
     pipeline_name: str,
     dry_run: bool,
     max_batches: int | None,
@@ -188,6 +196,8 @@ def run(
     from mdp.core.pipeline import Pipeline, PipelineConfig
     from mdp.core.registry import registry
 
+    t_cfg_paths = _parse_transformer_configs(transformer_configs, transformer_names)
+
     ext_cls: Any = registry.get_extractor(extractor_name)
     ext_cfg_data = _load_json(extractor_config) if extractor_config else {}
     extractor = ext_cls(ext_cls.config_class(**ext_cfg_data))
@@ -195,7 +205,8 @@ def run(
     transformers = []
     for tname in transformer_names:
         t_cls: Any = registry.get_transformer(tname)
-        transformers.append(t_cls(t_cls.config_class()))
+        t_cfg_data = _load_json(t_cfg_paths[tname]) if tname in t_cfg_paths else {}
+        transformers.append(t_cls(t_cls.config_class(**t_cfg_data)))
 
     loader = None
     if loader_name and not dry_run:
@@ -219,6 +230,31 @@ def run(
 
     if not result.ok:
         sys.exit(1)
+
+    if loader is not None and result.total_samples == 0:
+        Console(stderr=True).print(
+            "[red]Error:[/] nothing was written: no parameter samples reached the loader. "
+            "Binary packets carry no parameters until the [bold]decom[/] transformer "
+            "decodes them; see --transformer-config."
+        )
+        sys.exit(1)
+
+
+def _parse_transformer_configs(
+    values: tuple[str, ...], transformer_names: tuple[str, ...]
+) -> dict[str, Path]:
+    paths: dict[str, Path] = {}
+    for value in values:
+        name, sep, file = value.partition("=")
+        if not sep or not file:
+            raise click.BadParameter(f"expected NAME=FILE, got {value!r}")
+        if name not in transformer_names:
+            raise click.BadParameter(f"{name!r} is not one of the --transformer stages")
+        path = Path(file)
+        if not path.exists():
+            raise click.BadParameter(f"file not found: {file}")
+        paths[name] = path
+    return paths
 
 
 def _load_json(path: Path) -> dict[str, Any]:

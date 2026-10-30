@@ -4,6 +4,7 @@
 
 # Explicitly binary: never convert
 *.parquet binary
+*.tlm     binary
 *.h5      binary
 *.hdf5    binary
 *.png     binary

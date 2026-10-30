@@ -38,6 +38,13 @@ class ParquetLoader(Loader[ParquetLoaderConfig]):
 
     config_class = ParquetLoaderConfig
 
+    def __init__(self, config: ParquetLoaderConfig) -> None:
+        super().__init__(config)
+        self._written: set[Path] = set()
+
+    def begin_run(self) -> None:
+        self._written.clear()
+
     def setup(self) -> None:
         self.config.output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -72,7 +79,10 @@ class ParquetLoader(Loader[ParquetLoaderConfig]):
 
     def _write_df(self, df: pd.DataFrame, path: Path) -> None:
         table = pa.Table.from_pandas(df, preserve_index=False)
-        if path.exists() and not self.config.overwrite:
+        # overwrite replaces earlier runs; batches of the same run accumulate.
+        keep_existing = path in self._written or not self.config.overwrite
+        if path.exists() and keep_existing:
             existing = pq.read_table(path)
-            table = pa.concat_tables([existing, table])
+            table = pa.concat_tables([existing, table], promote_options="default")
         pq.write_table(table, path, compression=self.config.compression)
+        self._written.add(path)

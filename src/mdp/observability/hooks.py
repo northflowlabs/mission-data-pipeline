@@ -7,9 +7,9 @@ Example::
 
     hooks = HookManager()
 
-    @hooks.on("batch.complete")
+    @hooks.on("batch.loaded")
     def on_batch(dataset, result):
-        prometheus_counter.inc(len(dataset))
+        print(f"{result.stage_name} wrote {len(dataset)} packets")
 
     pipeline = Pipeline(config, extractor, loader=loader, hooks=hooks)
 """
@@ -52,12 +52,12 @@ class HookManager:
 
     Built-in pipeline events
     ------------------------
-    ``pipeline.start``: fired before the extractor begins
-    ``pipeline.complete``: fired after all batches are processed
-    ``batch.extracted``: fired after each extractor yield
-    ``batch.transformed``: fired after all transformers process a batch
-    ``batch.loaded``: fired after the loader persists a batch
-    ``stage.error``: fired whenever any stage raises an exception
+    ``pipeline.start(name)``: fired before the extractor begins
+    ``pipeline.complete(result)``: fired after all batches are processed
+    ``batch.extracted(dataset)``: fired after each extractor yield
+    ``batch.transformed(dataset)``: fired after all transformers process a batch
+    ``batch.loaded(dataset, stage_result)``: fired after the loader persists a batch
+    ``stage.error(stage_name, exception)``: fired whenever any stage raises an exception
     """
 
     BUILTIN_EVENTS = (

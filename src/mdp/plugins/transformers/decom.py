@@ -125,7 +125,11 @@ class DecomTransformer(Transformer[DecomConfig]):
 
 
 def _extract_tai(packet: TelemetryPacket) -> float:
-    """Pull TAI from source_time_tai or derive a placeholder from seq_count."""
+    """Pull TAI from source_time_tai, else fall back to seq_count as an ordering key.
+
+    The fallback is not a time. Set ``source_time_tai`` from the mission's secondary
+    header in a transformer ahead of decom when you need real sample times.
+    """
     if packet.source_time_tai is not None:
         return packet.source_time_tai
     return float(packet.seq_count)

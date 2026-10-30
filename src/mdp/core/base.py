@@ -182,6 +182,9 @@ class Transformer(PipelineStage[ConfigT]):
 class Loader(PipelineStage[ConfigT]):
     """Persists a TelemetryDataset to a sink (file, database, message bus, etc.)."""
 
+    def begin_run(self) -> None:
+        """Called by the pipeline before the first batch of each run."""
+
     @abc.abstractmethod
     def load(self, dataset: TelemetryDataset) -> None:
         """Write the dataset to the configured sink."""
@@ -198,6 +201,7 @@ class Loader(PipelineStage[ConfigT]):
                 status=StageStatus.SUCCESS,
                 elapsed_s=elapsed,
                 records_in=records_in,
+                records_out=records_in,
             )
         except Exception as exc:
             elapsed = time.perf_counter() - t0

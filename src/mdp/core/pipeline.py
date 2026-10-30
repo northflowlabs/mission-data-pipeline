@@ -16,6 +16,7 @@ from mdp.core.base import (
     Transformer,
 )
 from mdp.models.dataset import TelemetryDataset
+from mdp.observability.hooks import HookManager
 from mdp.observability.metrics import PipelineMetrics
 
 log = structlog.get_logger(__name__)
@@ -41,6 +42,7 @@ class PipelineResult:
     elapsed_s: float
     batches_processed: int
     total_packets: int
+    total_samples: int = 0
     stage_results: list[StageResult] = field(default_factory=list)
     errors: list[Exception] = field(default_factory=list)
 
@@ -54,6 +56,7 @@ class PipelineResult:
             f"  elapsed   : {self.elapsed_s:.3f}s",
             f"  batches   : {self.batches_processed}",
             f"  packets   : {self.total_packets}",
+            f"  samples   : {self.total_samples}",
         ]
         if self.errors:
             lines.append(f"  errors    : {len(self.errors)}")
@@ -80,7 +83,8 @@ class Pipeline:
         result = pipeline.run()
 
     Each batch emitted by the extractor flows sequentially through all
-    transformers before being handed to the loader.
+    transformers before being handed to the loader. Pass a ``HookManager`` as
+    ``hooks`` to react to the events listed in ``HookManager.BUILTIN_EVENTS``.
     """
 
     def __init__(
@@ -89,16 +93,23 @@ class Pipeline:
         extractor: Extractor,  # type: ignore[type-arg]
         transformers: list[Transformer] | None = None,  # type: ignore[type-arg]
         loader: Loader | None = None,  # type: ignore[type-arg]
+        hooks: HookManager | None = None,
     ) -> None:
         self.config = config
         self.extractor = extractor
         self.transformers: list[Transformer] = transformers or []  # type: ignore[type-arg]
         self.loader = loader
+        self.hooks = hooks or HookManager()
         self._metrics = PipelineMetrics(pipeline_name=config.name)
 
     # ------------------------------------------------------------------ #
     #  Public interface                                                     #
     # ------------------------------------------------------------------ #
+
+    @property
+    def metrics(self) -> PipelineMetrics:
+        """Batch, packet and per-stage counters accumulated by this pipeline."""
+        return self._metrics
 
     def run(self) -> PipelineResult:
         """Execute the pipeline synchronously and return a result summary."""
@@ -107,21 +118,30 @@ class Pipeline:
         errors: list[Exception] = []
         batches = 0
         total_packets = 0
+        total_samples = 0
 
         log.info(
             "pipeline.start",
             pipeline=self.config.name,
             dry_run=self.config.dry_run,
         )
+        self.hooks.fire("pipeline.start", self.config.name)
+
+        if self.loader:
+            self.loader.begin_run()
 
         try:
             for dataset in self.extractor.extract():
                 batch_log = log.bind(batch=batches, packets=len(dataset))
                 batch_log.debug("pipeline.batch.extracted")
+                self.hooks.fire("batch.extracted", dataset)
 
                 dataset, t_results, t_errors = self._run_transformers(dataset)
                 all_stage_results.extend(t_results)
                 errors.extend(t_errors)
+                for t_result in t_results:
+                    self._record_stage(t_result)
+                self.hooks.fire("batch.transformed", dataset)
 
                 if t_errors and self.config.stop_on_error:
                     log.error("pipeline.stopped_on_error", stage=t_errors[0])
@@ -130,13 +150,17 @@ class Pipeline:
                 if self.loader and not self.config.dry_run:
                     load_result = self.loader._timed_load(dataset)
                     all_stage_results.append(load_result)
+                    self._record_stage(load_result)
                     if load_result.error:
                         errors.append(load_result.error)
+                        self.hooks.fire("stage.error", load_result.stage_name, load_result.error)
                         if self.config.stop_on_error:
                             break
+                    self.hooks.fire("batch.loaded", dataset, load_result)
 
                 batches += 1
                 total_packets += len(dataset)
+                total_samples += dataset.sample_count()
                 self._metrics.record_batch(len(dataset))
 
                 if self.config.max_batches and batches >= self.config.max_batches:
@@ -146,6 +170,7 @@ class Pipeline:
         except Exception as exc:
             errors.append(exc)
             log.exception("pipeline.unhandled_error", error=str(exc))
+            self.hooks.fire("stage.error", self.extractor.name, exc)
 
         elapsed = time.perf_counter() - t0
         status = StageStatus.SUCCESS if not errors else StageStatus.FAILED
@@ -156,6 +181,7 @@ class Pipeline:
             elapsed_s=elapsed,
             batches_processed=batches,
             total_packets=total_packets,
+            total_samples=total_samples,
             stage_results=all_stage_results,
             errors=errors,
         )
@@ -168,6 +194,7 @@ class Pipeline:
             batches=batches,
             packets=total_packets,
         )
+        self.hooks.fire("pipeline.complete", result)
         return result
 
     # ------------------------------------------------------------------ #
@@ -190,9 +217,19 @@ class Pipeline:
                     transformer=transformer.name,
                     error=str(result.error),
                 )
+                self.hooks.fire("stage.error", result.stage_name, result.error)
                 if self.config.stop_on_error:
                     break
         return dataset, results, errors
+
+    def _record_stage(self, result: StageResult) -> None:
+        self._metrics.record_stage(
+            result.stage_name,
+            records_in=result.records_in,
+            records_out=result.records_out,
+            elapsed_s=result.elapsed_s,
+            error=result.error is not None,
+        )
 
     def add_transformer(self, transformer: Transformer) -> Pipeline:  # type: ignore[type-arg]
         """Fluent method to append a transformer stage."""
