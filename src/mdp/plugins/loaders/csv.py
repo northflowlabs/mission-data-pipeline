@@ -20,7 +20,7 @@ class CsvLoaderConfig(BaseModel):
     output_dir: Path = Field(description="Directory where CSV files will be written")
     wide_format: bool = False
     delimiter: str = ","
-    float_format: str = "%.9f"
+    float_format: str = "%.17g"  # keeps every float64 exactly, at any magnitude
     overwrite: bool = True
 
 

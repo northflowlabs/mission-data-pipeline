@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 
@@ -83,17 +84,28 @@ class TelemetryDataset:
             }
             for s in record.samples
         ]
-        return pd.DataFrame(rows).sort_values("time_tai").reset_index(drop=True)
+        return pd.DataFrame(rows).sort_values(["time_tai", "seq_count"]).reset_index(drop=True)
 
     def to_wide_dataframe(self) -> pd.DataFrame:
-        """Return a wide DataFrame with one column per parameter, indexed by TAI time."""
+        """Return a wide DataFrame with one column per parameter, indexed by TAI time.
+
+        Raises ValueError if a parameter has no sample time, or two samples at one
+        time, because such samples cannot share a row.
+        """
         frames = {}
         for name, record in self.parameters.items():
-            series = pd.Series(
-                {s.sample_time_tai: s.eng_value for s in record.samples},
-                name=name,
-            )
-            frames[name] = series
+            times = [s.sample_time_tai for s in record.samples]
+            if any(math.isnan(t) for t in times):
+                raise ValueError(
+                    f"Parameter '{name}' has samples without a time; set source_time_tai "
+                    "or use the per-parameter output"
+                )
+            if len(set(times)) != len(times):
+                raise ValueError(
+                    f"Parameter '{name}' has several samples at one time; "
+                    "use the per-parameter output"
+                )
+            frames[name] = pd.Series([s.eng_value for s in record.samples], index=times, name=name)
         if not frames:
             return pd.DataFrame()
         return pd.DataFrame(frames).sort_index()
@@ -119,16 +131,13 @@ class TelemetryDataset:
             packets=self.packets + other.packets,
             metadata={**self.metadata, **other.metadata},
         )
-        for name, record in self.parameters.items():
-            merged.parameters[name] = record
-        for name, record in other.parameters.items():
-            if name in merged.parameters:
-                existing = merged.parameters[name]
-                object.__setattr__(
-                    existing,
-                    "samples",
-                    existing.samples + record.samples,
+        for source in (self, other):
+            for name, record in source.parameters.items():
+                existing = merged.parameters.get(name)
+                samples = existing.samples + record.samples if existing else record.samples
+                merged.parameters[name] = ParameterRecord(
+                    name=name,
+                    unit=existing.unit if existing else record.unit,
+                    samples=list(samples),
                 )
-            else:
-                merged.parameters[name] = record
         return merged

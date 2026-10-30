@@ -156,6 +156,7 @@ class Pipeline:
                         self.hooks.fire("stage.error", load_result.stage_name, load_result.error)
                         if self.config.stop_on_error:
                             break
+                        continue  # this batch was not loaded, so it is not counted
                     self.hooks.fire("batch.loaded", dataset, load_result)
 
                 batches += 1

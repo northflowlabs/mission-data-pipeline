@@ -10,9 +10,12 @@ import h5py
 import pandas as pd
 import pytest
 from click.testing import CliRunner
+from pydantic import BaseModel
 
 from mdp.cli.main import cli
+from mdp.core.base import Transformer
 from mdp.core.pipeline import Pipeline, PipelineConfig
+from mdp.models.dataset import TelemetryDataset
 from mdp.models.parameter import ParameterType
 from mdp.observability.hooks import HookManager
 from mdp.plugins.extractors.binary import BinaryExtractorConfig, BinaryPacketExtractor
@@ -45,6 +48,28 @@ SECONDS = ParameterDefinition(
     param_type=ParameterType.DOUBLE,
     little_endian=True,
 )
+
+
+class _PacketTimeConfig(BaseModel):
+    pass
+
+
+class _PacketTime(Transformer[_PacketTimeConfig]):
+    """Sets source_time_tai to the packet's UTC seconds since J2000, for ordering."""
+
+    config_class = _PacketTimeConfig
+
+    def transform(self, dataset: TelemetryDataset) -> TelemetryDataset:
+        epoch = datetime(2000, 1, 1, 12)
+        dataset.packets[:] = [
+            p.model_copy(
+                update={
+                    "source_time_tai": (_header_utc(p.secondary_header) - epoch).total_seconds()
+                }
+            )
+            for p in dataset.packets
+        ]
+        return dataset
 
 
 def _extractor(batch_size: int = 4, apids: list[int] | None = None) -> BinaryPacketExtractor:
@@ -125,7 +150,9 @@ def test_csv_keeps_every_batch_of_a_run(tmp_path: Path) -> None:
 
 
 def test_csv_wide_keeps_every_batch_of_a_run(tmp_path: Path) -> None:
-    _pipeline(CsvLoader(CsvLoaderConfig(output_dir=tmp_path, wide_format=True))).run()
+    pipeline = _pipeline(CsvLoader(CsvLoaderConfig(output_dir=tmp_path, wide_format=True)))
+    pipeline.transformers.insert(0, _PacketTime(_PacketTimeConfig()))
+    assert pipeline.run().ok
     assert len(pd.read_csv(tmp_path / "telemetry.csv")) == 9
 
 

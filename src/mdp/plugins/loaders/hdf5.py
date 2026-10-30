@@ -39,8 +39,12 @@ _ROOT_GROUP = "telemetry"
 class HDF5LoaderConfig(BaseModel):
     path: Path = Field(description="Output HDF5 file path (.h5 or .hdf5)")
     mode: str = Field(
-        default="a",
-        description="File open mode: 'w' (overwrite), 'a' (append/create), 'r+' (append only)",
+        default="w",
+        description=(
+            "How a run opens the file: 'w' replaces earlier runs, 'a' adds to them "
+            "(creating the file), 'r+' adds to an existing file. Batches of one run "
+            "always accumulate."
+        ),
     )
     compression: str = "gzip"
     compression_opts: Annotated[int, Field(ge=0, le=9)] = 4
@@ -92,17 +96,21 @@ class HDF5Loader(Loader[HDF5LoaderConfig]):
         validity = np.array([int(s.validity) for s in samples], dtype=np.uint8)
 
         eng_values = [s.eng_value for s in samples]
-        [s.raw_value for s in samples]
 
         grp = root.require_group(name)
+
+        # Every column of a parameter must stay the same length, so the value column
+        # is settled before anything is written.
+        eng_arr = self._coerce_numeric(eng_values)
+        if eng_arr is None and "eng_value" in grp:
+            raise ValueError(f"Parameter '{name}' has numeric samples and now non-numeric ones")
 
         self._append_or_create(grp, "time_tai", times, dtype=np.float64)
         self._append_or_create(grp, "apid", apids, dtype=np.int32)
         self._append_or_create(grp, "seq_count", seqs, dtype=np.int32)
         self._append_or_create(grp, "validity", validity, dtype=np.uint8)
 
-        eng_arr = self._coerce_numeric(eng_values)
-        if eng_arr is not None:
+        if eng_arr is not None and "eng_value_str" not in grp:
             self._append_or_create(grp, "eng_value", eng_arr, dtype=np.float64)
         else:
             encoded = np.array([str(v) for v in eng_values], dtype=h5py.string_dtype())
@@ -127,6 +135,7 @@ class HDF5Loader(Loader[HDF5LoaderConfig]):
                 compression=self.config.compression,
                 compression_opts=self.config.compression_opts,
                 dtype=dtype,
+                chunks=True,
             )
         else:
             ds = grp[name]

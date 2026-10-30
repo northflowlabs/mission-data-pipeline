@@ -10,6 +10,11 @@ Format assumptions
 Unless ``frame_sync`` is enabled, the input is assumed to be a contiguous
 stream of CCSDS Space Packets (no framing).  Each packet starts with a
 6-byte primary header followed by ``header.packet_data_length`` bytes.
+
+A stream that stops making sense is an error, not the end of the data: an invalid
+header or a truncated packet raises ``ValueError`` with its byte offset. With
+``frame_sync`` the extractor can recover, so it moves on to the next sync marker and
+counts the frame in the batch's ``skipped_frames`` metadata.
 """
 
 from __future__ import annotations
@@ -76,10 +81,9 @@ class BinaryPacketExtractor(Extractor[BinaryExtractorConfig]):
     def _parse_buffer(
         self, buffer: io.BytesIO, ground_receipt_time: float
     ) -> Iterator[TelemetryDataset]:
-        dataset = TelemetryDataset(
-            metadata={"source": str(self.config.path), "extractor": "binary"}
-        )
+        dataset = self._new_dataset()
         count = 0
+        skipped_frames = 0
 
         while True:
             if self.config.frame_sync:
@@ -87,18 +91,31 @@ class BinaryPacketExtractor(Extractor[BinaryExtractorConfig]):
                     break
                 buffer.read(4)
 
+            offset = buffer.tell()
             header_bytes = buffer.read(CCSDS_HEADER_SIZE)
-            if len(header_bytes) < CCSDS_HEADER_SIZE:
+            if not header_bytes:
                 break
 
             try:
                 header = CCSDSPrimaryHeader.from_bytes(header_bytes)
-            except (struct.error, ValueError):
-                continue
+            except (struct.error, ValueError) as exc:
+                if self.config.frame_sync:
+                    skipped_frames += 1
+                    continue
+                raise ValueError(
+                    f"Invalid CCSDS header at byte {offset} of {self.config.path}: "
+                    f"{header_bytes.hex()}"
+                ) from exc
 
             data_field = buffer.read(header.packet_data_length)
             if len(data_field) < header.packet_data_length:
-                break
+                if self.config.frame_sync:
+                    skipped_frames += 1
+                    continue
+                raise ValueError(
+                    f"Truncated packet at byte {offset} of {self.config.path}: "
+                    f"expected {header.packet_data_length} data bytes, got {len(data_field)}"
+                )
 
             if self.config.apid_filter and header.apid not in self.config.apid_filter:
                 continue
@@ -113,14 +130,18 @@ class BinaryPacketExtractor(Extractor[BinaryExtractorConfig]):
             count += 1
 
             if count >= self.config.batch_size:
+                dataset.metadata["skipped_frames"] = skipped_frames
                 yield dataset
-                dataset = TelemetryDataset(
-                    metadata={"source": str(self.config.path), "extractor": "binary"}
-                )
+                dataset = self._new_dataset()
                 count = 0
+                skipped_frames = 0
 
-        if dataset.packets:
+        if dataset.packets or skipped_frames:
+            dataset.metadata["skipped_frames"] = skipped_frames
             yield dataset
+
+    def _new_dataset(self) -> TelemetryDataset:
+        return TelemetryDataset(metadata={"source": str(self.config.path), "extractor": "binary"})
 
     @staticmethod
     def _seek_to_sync(buffer: io.BytesIO) -> bool:

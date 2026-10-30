@@ -46,7 +46,7 @@ class CCSDSPrimaryHeader(BaseModel):
 
     model_config = {"frozen": True}
 
-    version: Annotated[int, Field(ge=0, le=7, default=0)]
+    version: Annotated[int, Field(ge=0, le=0, default=0)]
     type_flag: Annotated[int, Field(ge=0, le=1, default=0)]
     sec_hdr_flag: Annotated[int, Field(ge=0, le=1, default=1)]
     apid: Annotated[int, Field(ge=0, le=0x7FF)]

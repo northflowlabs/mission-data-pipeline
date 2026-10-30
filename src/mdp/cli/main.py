@@ -132,7 +132,8 @@ def inspect(file: Path, max_packets: int, apid: tuple[int, ...]) -> None:
                     break
             if count >= max_packets:
                 break
-    except FileNotFoundError as exc:
+    except (FileNotFoundError, ValueError) as exc:
+        console.print(table)
         Console(stderr=True).print(f"[red]Error:[/] {exc}")
         sys.exit(1)
 
