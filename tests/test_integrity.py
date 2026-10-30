@@ -237,16 +237,16 @@ class TestLoaders:
         with h5py.File(path) as hf:
             assert len(hf["telemetry/x/eng_value"]) == 2
 
-    def test_hdf5_columns_stay_aligned_when_values_turn_numeric(self, tmp_path: Path) -> None:
+    def test_hdf5_refuses_numbers_after_text_without_writing(self, tmp_path: Path) -> None:
         path = tmp_path / "t.h5"
         batches = [[_param(value="NOMINAL")], [_param(value=1.0)]]
         result = Pipeline(
             PipelineConfig(name="x"), _Batches(batches), [], HDF5Loader(HDF5LoaderConfig(path=path))
         ).run()
-        assert result.ok
+        assert not result.ok
         with h5py.File(path) as hf:
             group = hf["telemetry/x"]
-            assert len(group["eng_value_str"]) == len(group["time_tai"]) == 2
+            assert len(group["eng_value_str"]) == len(group["time_tai"]) == 1
 
     def test_hdf5_refuses_text_after_numbers_without_writing(self, tmp_path: Path) -> None:
         path = tmp_path / "t.h5"

@@ -7,15 +7,18 @@ from datetime import datetime
 from pathlib import Path
 
 import h5py
+import numpy as np
 import pandas as pd
 import pyarrow.parquet as pq
 import pytest
 
-from mdp.core.pipeline import Pipeline, PipelineConfig
+from mdp.core.base import StageStatus
+from mdp.core.pipeline import Pipeline, PipelineConfig, PipelineResult
 from mdp.models.dataset import TelemetryDataset
 from mdp.models.parameter import EngineeringParameter, ParameterType
 from mdp.models.time import utc_to_tai_j2000
 from mdp.plugins.extractors.binary import BinaryExtractorConfig, BinaryPacketExtractor
+from mdp.plugins.extractors.csv import CsvExtractorConfig, CsvTelemetryExtractor
 from mdp.plugins.loaders.csv import CsvLoader, CsvLoaderConfig
 from mdp.plugins.loaders.hdf5 import HDF5Loader, HDF5LoaderConfig
 from mdp.plugins.loaders.parquet import ParquetLoader, ParquetLoaderConfig
@@ -82,17 +85,105 @@ class TestHdf5Types:
         with h5py.File(path) as hf:
             assert hf["telemetry/x/eng_value"][:].tolist() == [True, False]
 
-    def test_a_float_does_not_silently_truncate_in_an_integer_column(self, tmp_path: Path) -> None:
-        ok, path = _load_hdf5(tmp_path, [_sample(1)], [_sample(1.5)])
+    def test_floats_after_integers_widen_the_column(self, tmp_path: Path) -> None:
+        ok, path = _load_hdf5(tmp_path, [_sample(1)], [_sample(1.5)], [_sample(2)])
+        assert ok
+        with h5py.File(path) as hf:
+            assert hf["telemetry/x/eng_value"].dtype == "float64"
+            assert hf["telemetry/x/eng_value"][:].tolist() == [1.0, 1.5, 2.0]
+            assert len(hf["telemetry/x/time_tai"]) == 3
+
+    def test_a_large_integer_does_not_widen_to_float(self, tmp_path: Path) -> None:
+        ok, path = _load_hdf5(tmp_path, [_sample(2**53 + 1)], [_sample(1.5)])
         assert not ok
         with h5py.File(path) as hf:
-            assert len(hf["telemetry/x/time_tai"]) == len(hf["telemetry/x/eng_value"]) == 1
+            assert int(hf["telemetry/x/eng_value"][0]) == 2**53 + 1
+            assert len(hf["telemetry/x/time_tai"]) == 1
+
+    def test_an_integer_just_past_exact_float_stays_out_of_a_float_column(
+        self, tmp_path: Path
+    ) -> None:
+        ok, _ = _load_hdf5(tmp_path, [_sample(1.5)], [_sample(2**53 + 1)])
+        assert not ok
+
+    def test_large_integers_widen_to_uint64(self, tmp_path: Path) -> None:
+        ok, path = _load_hdf5(tmp_path, [_sample(1)], [_sample(2**63)])
+        assert ok
+        with h5py.File(path) as hf:
+            assert hf["telemetry/x/eng_value"][:].tolist() == [1, 2**63]
+
+    @pytest.mark.parametrize("batch_size", [1, 2, 3, 1000])
+    def test_a_negative_and_a_very_large_integer_fail_at_any_batch_size(
+        self, tmp_path: Path, batch_size: int
+    ) -> None:
+        samples = [_sample(1), _sample(-1), _sample(2**63)]
+        error = _run_batches(tmp_path, samples, batch_size)
+        assert "negative integers" in str(error)
 
     def test_a_small_integer_fits_a_float_column(self, tmp_path: Path) -> None:
         ok, path = _load_hdf5(tmp_path, [_sample(1.5)], [_sample(2)])
         assert ok
         with h5py.File(path) as hf:
             assert hf["telemetry/x/eng_value"][:].tolist() == [1.5, 2.0]
+
+
+def _run_batches(
+    tmp_path: Path, samples: list[EngineeringParameter], batch_size: int
+) -> Exception | None:
+    batches = [samples[i : i + batch_size] for i in range(0, len(samples), batch_size)]
+    loader = HDF5Loader(HDF5LoaderConfig(path=tmp_path / f"{batch_size}.h5"))
+    result = Pipeline(PipelineConfig(name="x"), _Batches(batches), [], loader).run()
+    return result.errors[0] if result.errors else None
+
+
+class TestHdf5AtAnyBatchSize:
+    CSV = "time,apid,seq_count,temp\n" + "".join(
+        f"{i}.0,1,{i},{cell}\n" for i, cell in enumerate(["20.5", "21", "nan", "22.5", "23"])
+    )
+
+    def _run_csv(self, tmp_path: Path, batch_size: int, **config: object) -> PipelineResult:
+        source = tmp_path / "t.csv"
+        source.write_text(self.CSV, encoding="utf-8")
+        extractor = CsvTelemetryExtractor(
+            CsvExtractorConfig(path=source, batch_size=batch_size, **config)
+        )
+        loader = HDF5Loader(HDF5LoaderConfig(path=tmp_path / f"{batch_size}.h5"))
+        return Pipeline(PipelineConfig(name="x"), extractor, [], loader).run()
+
+    @pytest.mark.parametrize("batch_size", [1, 2, 3, 4, 1000])
+    def test_a_nan_cell_in_a_numeric_column_fails_the_same_way(
+        self, tmp_path: Path, batch_size: int
+    ) -> None:
+        result = self._run_csv(tmp_path, batch_size)
+        assert result.status == StageStatus.FAILED
+        assert "'temp' mixes numbers, text or booleans" in str(result.errors[0])
+
+    @pytest.mark.parametrize("batch_size", [1, 2, 3, 1000])
+    def test_a_declared_float_column_keeps_its_nan(self, tmp_path: Path, batch_size: int) -> None:
+        result = self._run_csv(tmp_path, batch_size, parameter_types={"temp": ParameterType.FLOAT})
+        assert result.ok
+        with h5py.File(tmp_path / f"{batch_size}.h5") as hf:
+            values = hf["telemetry/temp/eng_value"][:]
+        assert values.dtype == "float64"
+        assert values[np.isfinite(values)].tolist() == [20.5, 21.0, 22.5, 23.0]
+
+    @pytest.mark.parametrize("batch_size", [1, 2, 3, 1000])
+    def test_integers_and_floats_give_one_column(self, tmp_path: Path, batch_size: int) -> None:
+        samples = [_sample(1), _sample(2), _sample(2.5), _sample(3)]
+        assert _run_batches(tmp_path, samples, batch_size) is None
+        with h5py.File(tmp_path / f"{batch_size}.h5") as hf:
+            assert hf["telemetry/x/eng_value"].dtype == "float64"
+            assert hf["telemetry/x/eng_value"][:].tolist() == [1.0, 2.0, 2.5, 3.0]
+
+    @pytest.mark.parametrize("batch_size", [1, 2, 3])
+    @pytest.mark.parametrize(
+        "values", [[1.0, "x", 2.0], ["x", 1.0, "y"], [True, 1, False], [1, True, 2], [True, "x", 1]]
+    )
+    def test_mixed_kinds_fail_alike(
+        self, tmp_path: Path, batch_size: int, values: list[object]
+    ) -> None:
+        error = _run_batches(tmp_path, [_sample(v) for v in values], batch_size)
+        assert "mixes numbers, text or booleans" in str(error)
 
 
 class TestDecomValidation:

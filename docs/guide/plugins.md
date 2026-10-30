@@ -29,7 +29,7 @@ Built-in stages register themselves by name in `mdp.core.registry.registry` when
 ### Loaders
 
 - `parquet` writes to `output_dir`, Snappy compression by default, one file per parameter or one wide table (`wide_format`), optionally partitioned by APID.
-- `hdf5` writes to one file at `path` with gzip compression. It can append across batches.
+- `hdf5` writes to one file at `path` with gzip compression. It can append across batches. A parameter holds one kind of value at any batch size: integers and floats share a float64 column, and numbers, text and booleans in one parameter fail the run. Declare the type with `parameter_types` where a column needs it.
 - `csv` writes to `output_dir`, per parameter or wide format.
 
 ## Write your own stage

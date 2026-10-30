@@ -18,6 +18,11 @@ hierarchy is::
 Values are stored by their type. Text stays text, even when it looks like a number,
 and integers are not passed through float64, so 64-bit counters keep every digit.
 
+A parameter holds one kind of value, and the outcome does not depend on how a run is
+split into batches. Integers and floats share a float64 column, and a column is rewritten
+to it when floats arrive after integers. Numbers, text and booleans in one parameter
+fail the run, as do integers that no single type can hold exactly.
+
 This layout is directly compatible with tools like HDFView, h5py, and xarray.
 """
 
@@ -25,7 +30,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 import h5py
 import numpy as np
@@ -38,6 +43,7 @@ from mdp.models.dataset import TelemetryDataset
 from mdp.models.parameter import EngineeringParameter
 
 _ROOT_GROUP = "telemetry"
+_MAX_EXACT_FLOAT = 2**53
 
 
 class HDF5LoaderConfig(BaseModel):
@@ -109,21 +115,24 @@ class HDF5Loader(Loader[HDF5LoaderConfig]):
 
         # Every column of a parameter must stay the same length, so the value column
         # is settled before anything is written.
-        typed = _typed_values(eng_values)
-        if typed is None and "eng_value" in grp:
-            raise ValueError(f"Parameter '{name}' has numeric samples and now non-numeric ones")
-        if typed is not None and "eng_value" in grp and not _fits(typed, grp["eng_value"].dtype):
-            raise ValueError(
-                f"Parameter '{name}': {typed.dtype} values do not fit its "
-                f"{grp['eng_value'].dtype} column"
-            )
+        typed = _typed_values(name, eng_values)
+        if ("eng_value" if typed is None else "eng_value_str") in grp:
+            raise _mixed_kinds(name)
+        if typed is not None and "eng_value" in grp:
+            column = grp["eng_value"]
+            common = _common_dtype(name, typed, column.dtype)
+            if common != column.dtype:
+                stored = column[()]
+                _common_dtype(name, stored, typed.dtype)
+                del grp["eng_value"]
+                self._append_or_create(grp, "eng_value", stored.astype(common))
 
         self._append_or_create(grp, "time_tai", times, dtype=np.float64)
         self._append_or_create(grp, "apid", apids, dtype=np.int32)
         self._append_or_create(grp, "seq_count", seqs, dtype=np.int32)
         self._append_or_create(grp, "validity", validity, dtype=np.uint8)
 
-        if typed is not None and "eng_value_str" not in grp:
+        if typed is not None:
             self._append_or_create(grp, "eng_value", typed)
         else:
             encoded = np.array([str(v) for v in eng_values], dtype=h5py.string_dtype())
@@ -158,28 +167,59 @@ class HDF5Loader(Loader[HDF5LoaderConfig]):
             ds[old_size:] = data
 
 
-def _typed_values(values: Sequence[object]) -> NDArray[np.generic] | None:
-    """An array of the values' own type, or None for anything that is not numeric."""
+def _mixed_kinds(name: str) -> ValueError:
+    return ValueError(
+        f"Parameter '{name}' mixes numbers, text or booleans, and a parameter holds one kind "
+        "of value at any batch size. Clean the data or declare the type, for CSV with "
+        "parameter_types: a float column reads nan as a number."
+    )
+
+
+def _typed_values(name: str, values: Sequence[object]) -> NDArray[np.generic] | None:
+    """An array of the values' own type, or None for text. Mixed kinds are refused."""
     if all(isinstance(v, bool) for v in values):
         return np.array(values, dtype=np.bool_)
-    if any(isinstance(v, bool) or not isinstance(v, (int, float)) for v in values):
+    if not any(isinstance(v, (bool, int, float)) for v in values):
         return None
+    if any(isinstance(v, bool) or not isinstance(v, (int, float)) for v in values):
+        raise _mixed_kinds(name)
     if all(isinstance(v, int) for v in values):
         integers = [int(v) for v in values]  # type: ignore[call-overload]
-        return np.array(integers, dtype=np.uint64 if max(integers) >= 2**63 else np.int64)
-    if any(isinstance(v, int) and abs(v) > 2**53 for v in values):
-        raise ValueError("Integers beyond 2^53 cannot share a column with floats")
+        if max(integers) < 2**63:
+            return np.array(integers, dtype=np.int64)
+        if min(integers) < 0:
+            raise _no_common_integer(name)
+        return np.array(integers, dtype=np.uint64)
+    if any(isinstance(v, int) and abs(v) > _MAX_EXACT_FLOAT for v in values):
+        raise _no_exact_float(name)
     return np.array(values, dtype=np.float64)
 
 
-def _fits(values: NDArray[np.generic], column: np.dtype[np.generic]) -> bool:
-    """Whether every value keeps its exact meaning in the existing column."""
-    if values.dtype == column:
-        return True
-    if column == np.float64 and values.dtype.kind in "iu":
-        return bool(np.all(np.abs(values.astype(np.float64)) <= 2**53))
-    if column == np.int64 and values.dtype == np.uint64:
-        return False
-    if column == np.uint64 and values.dtype == np.int64:
-        return bool(np.all(values.astype(np.int64) >= 0))
-    return False
+def _no_exact_float(name: str) -> ValueError:
+    return ValueError(f"Parameter '{name}': integers beyond 2^53 cannot share a column with floats")
+
+
+def _no_common_integer(name: str) -> ValueError:
+    return ValueError(
+        f"Parameter '{name}': negative integers cannot share a column with integers from 2^63"
+    )
+
+
+def _common_dtype(
+    name: str, values: NDArray[Any], other: np.dtype[np.generic]
+) -> np.dtype[np.generic]:
+    """The type that holds *values* and a column of *other* exactly, or a refusal."""
+    kinds = {values.dtype.kind, other.kind}
+    if len(kinds) == 1:
+        return other
+    if "b" in kinds:
+        raise _mixed_kinds(name)
+    is_integer = values.dtype.kind in "iu"
+    low, high = (int(np.min(values)), int(np.max(values))) if is_integer else (0, 0)
+    if "f" in kinds:
+        if max(-low, high) > _MAX_EXACT_FLOAT:
+            raise _no_exact_float(name)
+        return np.dtype(np.float64)
+    if low < 0:
+        raise _no_common_integer(name)
+    return np.dtype(np.uint64)
