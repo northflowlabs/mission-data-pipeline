@@ -62,3 +62,5 @@ pipeline = Pipeline(PipelineConfig(name="hk"), extractor, loader=loader, hooks=h
 | `pipeline.complete` | pipeline result | After the run, also a failed one |
 
 `Pipeline.metrics` holds the batch, packet and per-stage counters of the pipeline.
+
+`PipelineResult.data_issues` counts data lost along the way, and `summary()` prints it: `skipped_frames` from the binary extractor with `frame_sync`, and `short_packets` for parameters that did not fit in a packet.

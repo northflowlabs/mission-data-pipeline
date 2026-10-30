@@ -21,14 +21,14 @@ import h5py
 import pandas as pd
 
 from mdp.core.pipeline import Pipeline, PipelineConfig
+from mdp.models.time import utc_to_tai_j2000
 from mdp.observability.logging import configure_logging
 from mdp.plugins.extractors.csv import CsvExtractorConfig, CsvTelemetryExtractor
 from mdp.plugins.loaders.hdf5 import HDF5Loader, HDF5LoaderConfig
 
 EXCERPT = Path(__file__).parent / "data" / "opssat_ad_excerpt.csv"
 
-# TAI-UTC was 37 s in 2022 and 32 s at J2000.
-TAI_SINCE_J2000_OFFSET_S = 37 - 32
+TAI_MINUS_UTC_S = 37  # leap seconds in force in 2022
 
 
 def prepare_csv(source: Path, target: Path) -> list[str]:
@@ -37,8 +37,8 @@ def prepare_csv(source: Path, target: Path) -> list[str]:
     wide = rows.pivot(index="timestamp", columns="channel", values="value").sort_index()
     channels = list(wide.columns)
 
-    j2000 = pd.Timestamp("2000-01-01T12:00:00", tz="UTC")
-    wide.insert(0, "time", (wide.index - j2000).total_seconds() + TAI_SINCE_J2000_OFFSET_S)
+    times = [t.tz_localize(None).to_pydatetime() for t in wide.index]
+    wide.insert(0, "time", [utc_to_tai_j2000(t, TAI_MINUS_UTC_S) for t in times])
     wide.insert(1, "apid", 0)  # the published data carries no APIDs
     wide.insert(2, "seq_count", range(len(wide)))
     wide.to_csv(target, index=False)

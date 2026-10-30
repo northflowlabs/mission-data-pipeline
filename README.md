@@ -228,7 +228,7 @@ Implements the 6-byte CCSDS Space Packet primary header per **CCSDS 133.0-B-2, S
 | Bits | Field | Range |
 |------|-------|-------|
 | 3 | `version` | 0 (fixed) |
-| 1 | `type_flag` | 0=TM, 1=TC |
+| 1 | `type_flag` | 0=telemetry (reporting), 1=telecommand (requesting) |
 | 1 | `sec_hdr_flag` | secondary header present |
 | 11 | `apid` | 0x000 to 0x7FF |
 | 2 | `seq_flags` | see `PacketSequenceFlags` |
@@ -244,13 +244,13 @@ Supports `from_bytes()` / `to_bytes()` round-trip. `from_bytes()` rejects a head
 | `header` | `CCSDSPrimaryHeader` | Parsed 6-byte primary header |
 | `secondary_header` | `bytes` | Raw secondary header (length mission-specific) |
 | `user_data` | `bytes` | Application user data field |
-| `source_time_tai` | `float \| None` | TAI seconds since J2000 epoch |
+| `source_time_tai` | `float \| None` | TAI seconds since J2000.0 (2000-01-01T12:00:00 TT, which is 11:59:27.816 TAI) |
 | `ground_receipt_time` | `float \| None` | Ground receipt time (UNIX epoch) |
 | `source_id` | `str \| None` | Ground station or spacecraft identifier |
 
 `from_bytes(raw, sec_hdr_length=N)` accepts a mission-specific secondary header length rather than assuming a fixed value.
 
-MDP does not decode secondary headers, because their format is mission-specific. Set `source_time_tai` from yours in a transformer ahead of `decom`, as `examples/01_binary_ingest.py` does. Without it, `time_tai` in the output is empty and `seq_count` gives the order, as in the pipeline above.
+MDP does not decode secondary headers, because their format is mission-specific. Set `source_time_tai` from yours in a transformer ahead of `decom`, as `examples/01_binary_ingest.py` does. `mdp.models.time.utc_to_tai_j2000` converts a UTC time. Without a packet time, `time_tai` in the output is empty and `seq_count` gives the order, as in the pipeline above. `seq_count` is a 14-bit counter per APID that wraps from 16383 to 0, so it orders packets of one APID only within a stretch shorter than a wrap.
 
 ### `TelemetryDataset`
 
@@ -261,7 +261,7 @@ dataset.packets                          # list[TelemetryPacket]
 dataset.parameters                       # dict[str, ParameterRecord]
 dataset.packets_by_apid(0x100)           # filtered packet list
 dataset.to_dataframe("obc_temp")         # tidy pd.DataFrame, sorted by TAI
-dataset.to_wide_dataframe()              # wide pd.DataFrame, indexed by TAI
+dataset.to_wide_dataframe()              # wide pd.DataFrame, indexed by TAI, units in .attrs
 dataset.merge(other_dataset)             # non-destructive merge
 ```
 
@@ -345,7 +345,7 @@ pytest -v --cov=mdp --cov-report=term-missing
 pytest tests/test_models_packet.py -v
 ```
 
-Current coverage: **91% overall**.
+Current coverage: **92% overall**.
 
 ## Roadmap
 
@@ -359,13 +359,12 @@ Current coverage: **91% overall**.
 
 ## Reference Standards
 
-This library implements or aligns with the following CCSDS and ECSS standards:
+This library implements or aligns with the following CCSDS and ECSS standards. It does not decode the time codes of CCSDS 301.0-B-4 (CUC, CDS and others), which live in mission-specific secondary headers.
 
 | Standard | Title | Scope in MDP |
 |---|---|---|
 | **CCSDS 133.0-B-2** | Space Packet Protocol | `CCSDSPrimaryHeader`, `TelemetryPacket` |
 | **CCSDS 132.0-B-3** | TM Space Data Link Protocol | `TMFramePrimaryHeader`, `TelemetryFrame` |
-| **CCSDS 301.0-B-4** | Time Code Formats | TAI/J2000 epoch convention throughout |
 | **ECSS-E-ST-70-41C** | TM/TC Packet Utilization | Parameter decommutation model, MIB conventions |
 
 ## Contributing

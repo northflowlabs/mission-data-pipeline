@@ -18,12 +18,20 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - `CsvLoaderConfig.float_format` defaults to `%.17g`, which keeps small values
 
 ### Fixed
+- HDF5 stores values by their type: text that looks like a number stays text, and 64-bit integers keep every digit
+- `FLOAT` and `DOUBLE` parameters with the wrong length are refused at validation
+- Packets too short for a parameter are counted in `short_packets`, and `frame_sync` losses in `skipped_frames`. Both reach `PipelineResult.data_issues` and `summary()`
+- `time_tai` is documented and computed as TAI seconds since J2000.0 (12:00 TT). The examples used an epoch 32.184 s late
+- `mark_uncalibrated_invalid` works
+- Mixing units for one parameter raises, and a record's unit changes only when all its samples were converted. Wide Parquet and CSV output carries units
+- Parquet widens an integer column that meets floats in a later batch
+- JSON config files are read as UTF-8
 - `mdp` and console logging work on Windows from a plain install: `colorama` is a dependency there
 - `decom` reads integer and boolean fields at any bit position, with the new `bit_offset`, and sign-extends signed fields of any length
 - `TelemetryDataset.merge()` leaves both inputs unchanged
 - `batch.loaded` no longer fires after a failed load, and a failed batch is not counted
 - HDF5 parameters keep their columns the same length when a batch changes value type
-- Parquet, CSV and HDF5 loaders keep every batch of a run. Each batch used to overwrite the last with the default settings, so only the final batch survived
+- Parquet, CSV and HDF5 loaders keep every batch of a run. Each batch used to overwrite the last with the default settings, so only the final batch survived. A rerun replaces files of the same name; files for parameters the rerun no longer produces stay in place
 - `Pipeline` fires the hooks the documentation describes; pass a `HookManager` as `hooks`
 - `mdp run` exits with status 1 when a run gives the loader nothing to write, instead of reporting success with no output
 - `configure_logging()` no longer fails on the first log call, and `fmt="json"` now produces JSON lines

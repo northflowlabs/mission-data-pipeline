@@ -29,6 +29,7 @@ from mdp.core.base import Transformer
 from mdp.core.pipeline import Pipeline, PipelineConfig
 from mdp.models.dataset import TelemetryDataset
 from mdp.models.parameter import ParameterType
+from mdp.models.time import utc_to_tai_j2000
 from mdp.observability.hooks import HookManager
 from mdp.observability.logging import configure_logging
 from mdp.plugins.extractors.binary import BinaryExtractorConfig, BinaryPacketExtractor
@@ -50,9 +51,7 @@ TELEMETRY = Path(__file__).parent / "data" / "CYGNSS_F7_L0_2022_086_10_15_V01_F_
 GPS_APID = 1313
 SEC_HDR_LENGTH = 10  # bytes 6 to 15 of each packet
 
-# TAI-UTC was 37 s in 2022 and 32 s at J2000.
-J2000 = datetime(2000, 1, 1, 12)
-TAI_SINCE_J2000_OFFSET_S = 37 - 32
+TAI_MINUS_UTC_S = 37  # leap seconds in force in 2022
 
 
 class CygnssTimeConfig(BaseModel):
@@ -86,7 +85,7 @@ def _tai_seconds(secondary_header: bytes) -> float:
         seconds=field(38, 6),
         microseconds=field(44, 20),
     )
-    return (utc - J2000).total_seconds() + TAI_SINCE_J2000_OFFSET_S
+    return utc_to_tai_j2000(utc, TAI_MINUS_UTC_S)
 
 
 def main() -> None:

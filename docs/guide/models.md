@@ -9,7 +9,7 @@ The 6-byte CCSDS Space Packet primary header, per CCSDS 133.0-B-2 section 4.1.
 | Bits | Field | Range |
 |------|-------|-------|
 | 3 | `version` | 0 (fixed) |
-| 1 | `type_flag` | 0 = TM, 1 = TC |
+| 1 | `type_flag` | 0 = telemetry (reporting), 1 = telecommand (requesting) |
 | 1 | `sec_hdr_flag` | secondary header present |
 | 11 | `apid` | 0x000 to 0x7FF |
 | 2 | `seq_flags` | see `PacketSequenceFlags` |
@@ -25,7 +25,7 @@ The 6-byte CCSDS Space Packet primary header, per CCSDS 133.0-B-2 section 4.1.
 | `header` | `CCSDSPrimaryHeader` | Parsed primary header |
 | `secondary_header` | `bytes` | Raw secondary header, length is mission specific |
 | `user_data` | `bytes` | Application data field |
-| `source_time_tai` | `float \| None` | TAI seconds since the J2000 epoch |
+| `source_time_tai` | `float \| None` | TAI seconds since J2000.0 (2000-01-01T12:00:00 TT, which is 11:59:27.816 TAI) |
 | `ground_receipt_time` | `float \| None` | Ground receipt time, UNIX epoch |
 | `source_id` | `str \| None` | Ground station or spacecraft identifier |
 
@@ -66,5 +66,4 @@ len(dataset)                       # number of packets
 |---|---|---|
 | CCSDS 133.0-B-2 | Space Packet Protocol | `CCSDSPrimaryHeader`, `TelemetryPacket` |
 | CCSDS 132.0-B-3 | TM Space Data Link Protocol | `TMFramePrimaryHeader`, `TelemetryFrame` |
-| CCSDS 301.0-B-4 | Time Code Formats | TAI and J2000 epoch convention |
 | ECSS-E-ST-70-41C | TM/TC Packet Utilization | Decommutation model, MIB conventions |
