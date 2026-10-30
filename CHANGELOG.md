@@ -18,11 +18,16 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - `time_tai` is empty for samples whose packet has no `source_time_tai`. It used to hold the sequence count
 - `to_wide_dataframe()` raises if a parameter has no sample time, or several samples at one time, instead of dropping samples
 - `CsvLoaderConfig.float_format` defaults to `%.17g`, which keeps small values
+- The CSV extractor reads quoting strictly, so an unclosed quote or a file cut off inside a quoted cell fails the run with the line it began on, instead of swallowing the rows after it
+- A repeated CSV column name fails the run. It used to lose a column without saying so
+- An empty CSV fails the run, and so does an empty file with `frame_sync`, as a file with no marker does
 
 ### Fixed
 - `frame_sync` finds a marker right after a stray 0x1A, and reads every packet of a multi-packet frame
 - `frame_sync` counts bytes before the first marker in `lead_in_bytes`, fails a file with no marker, skips a packet whose length crosses a marker unless it ends exactly at the next marker or the end of the file, and treats fill and idle packets as `fill_bytes` and `idle_packets` instead of phantom packets
-- A CSV row of the wrong width is counted in `wrong_width_rows`, never shifted, and a trailing delimiter is handled. Cells such as `E1`, `e5` and `-` stay text. `source_id` reaches the dataset metadata
+- A CSV row of the wrong width is counted in `wrong_width_rows`, never shifted, and a trailing delimiter is decided once per file. Cells such as `E1`, `e5` and `-` stay text. `source_id` reaches the dataset metadata
+- `frame_sync` skips a packet that ends inside a marker, and does not trust a packet behind a crossed marker that ends within the skipped packet's stated length
+- A CSV row with a `nan` or `inf` sample time counts in `skipped_rows`
 - `mdp inspect --max-packets 0` is a clean error
 - `BinaryPacketExtractor` leaves `ground_receipt_time` empty unless configured, instead of filling it with the wall clock
 - The CSV extractor reads cells as text and converts them by `parameter_types`, so long integers and "007" survive. Short rows count in `skipped_rows` and empty cells in `empty_cells`

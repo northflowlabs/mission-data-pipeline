@@ -267,7 +267,7 @@ dataset.merge(other_dataset)             # non-destructive merge
 
 ## Reading CSV telemetry
 
-`CsvExtractorConfig.parameter_types` declares a column's type, such as `{"mode": "string", "counter": "uint"}`. Cells are read as text and converted by that type, so integers keep every digit. Without a declaration, a cell written as a plain number becomes one, and anything else, such as `007`, stays text. A row with too many or too few cells is skipped and counted, never shifted.
+`CsvExtractorConfig.parameter_types` declares a column's type, such as `{"mode": "string", "counter": "uint"}`. Cells are read as text and converted by that type, so integers keep every digit. Without a declaration, a cell written as a plain number becomes one, and anything else, such as `007`, stays text. A row with too many or too few cells is skipped and counted, never shifted. A trailing delimiter is decided once per file, from the first 1000 rows, and every row is held to that form. A row whose time is not finite is counted in `skipped_rows`. An empty file, a repeated column name or broken quoting fails the run.
 
 ## Extending MDP
 

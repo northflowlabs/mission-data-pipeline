@@ -48,8 +48,10 @@ class TestFrameSync:
         assert result.status == StageStatus.FAILED
         assert "No sync marker" in str(result.errors[0])
 
-    def test_an_empty_file_is_not_a_failure(self, tmp_path: Path) -> None:
-        assert _run(tmp_path, b"").status == StageStatus.SUCCESS
+    def test_an_empty_file_fails_like_a_file_with_no_marker(self, tmp_path: Path) -> None:
+        result = _run(tmp_path, b"")
+        assert result.status == StageStatus.FAILED
+        assert "No sync marker" in str(result.errors[0])
 
     def test_a_clean_file_has_no_issues(self, tmp_path: Path) -> None:
         result = _run(tmp_path, SYNC + make_raw_packet())
@@ -78,6 +80,38 @@ class TestFrameSync:
         result = _run(tmp_path, SYNC + first + second)
         assert result.data_issues["skipped_frames"] >= 1
         assert result.status != StageStatus.SUCCESS
+
+    @pytest.mark.parametrize("into_marker", [1, 2, 3])
+    def test_a_length_ending_inside_a_marker_crosses_it(
+        self, tmp_path: Path, into_marker: int
+    ) -> None:
+        bad = bytearray(make_raw_packet(seq_count=1, user_data=b"\x07" * 4))
+        bad[4:6] = (3 + into_marker).to_bytes(2, "big")
+        data = SYNC + bytes(bad) + SYNC + make_raw_packet(seq_count=2, user_data=b"\x09" * 8)
+        assert _seqs(tmp_path, data) == [2]
+        assert _run(tmp_path, data).data_issues == {"skipped_frames": 1}
+
+    def test_a_payload_tail_gives_no_phantom_packet(self, tmp_path: Path) -> None:
+        phantom = make_raw_packet(apid=9, seq_count=7, user_data=b"\x05" * 2)
+        first = make_raw_packet(seq_count=1, user_data=SYNC + phantom + b"\x06" * 3)
+        second = make_raw_packet(seq_count=2, user_data=b"\x08" * 4)
+        data = SYNC + first + second
+        assert _seqs(tmp_path, data) == []
+        assert _run(tmp_path, data).data_issues == {"skipped_frames": 2}
+
+    def test_a_real_frame_past_the_stated_length_survives(self, tmp_path: Path) -> None:
+        bad = bytearray(make_raw_packet(seq_count=1, user_data=b"\x07" * 4))
+        bad[4:6] = (20).to_bytes(2, "big")
+        data = SYNC + bytes(bad) + SYNC + make_raw_packet(seq_count=2, user_data=b"\x09" * 40)
+        assert _seqs(tmp_path, data) == [2]
+
+    def test_a_huge_bad_length_costs_only_its_own_frame(self, tmp_path: Path) -> None:
+        bad = bytearray(make_raw_packet(seq_count=1, user_data=b"\x07" * 4))
+        bad[4:6] = (60).to_bytes(2, "big")
+        rest = b"".join(
+            SYNC + make_raw_packet(seq_count=seq, user_data=b"\x09" * 8) for seq in (2, 3, 4)
+        )
+        assert _seqs(tmp_path, SYNC + bytes(bad) + rest + b"\x03" * 40) == [2, 3, 4]
 
     def test_zero_fill_is_not_phantom_packets(self, tmp_path: Path) -> None:
         data = (
@@ -128,6 +162,95 @@ class TestCsvWidths:
         ds = self._read(tmp_path, "time,apid,seq_count,x,y,\n1.0,1,0,5,6,\n")[0]
         assert ds.metadata["wrong_width_rows"] == 0
         assert list(ds.parameters) == ["x", "y"]
+
+    def test_a_lone_trailing_delimiter_has_the_wrong_width(self, tmp_path: Path) -> None:
+        text = "time,apid,seq_count,temp,mode\n1.0,100,1,20,4\n2.0,100,2,21,5,\n3.0,100,3,22,6\n"
+        ds = self._read(tmp_path, text)[0]
+        assert ds.metadata["wrong_width_rows"] == 1
+        assert [s.sample_time_tai for s in ds.parameters["temp"].samples] == [1.0, 3.0]
+
+    def test_a_row_without_the_files_trailing_delimiter_has_the_wrong_width(
+        self, tmp_path: Path
+    ) -> None:
+        text = self.HEADER + "1.0,1,0,5,6,\n2.0,1,1,7,8,\n3.0,1,2,9,\n"
+        ds = self._read(tmp_path, text)[0]
+        assert ds.metadata["wrong_width_rows"] == 1
+        assert [s.eng_value for s in ds.parameters["x"].samples] == [5, 7]
+
+    def test_a_trailing_header_decides_a_tie(self, tmp_path: Path) -> None:
+        text = "time,apid,seq_count,x,\n1.0,1,0,5,\n2.0,1,1,7\n"
+        ds = self._read(tmp_path, text)[0]
+        assert ds.metadata["wrong_width_rows"] == 1
+        assert [s.eng_value for s in ds.parameters["x"].samples] == [5]
+
+    def test_the_header_alone_does_not_outvote_the_rows(self, tmp_path: Path) -> None:
+        ds = self._read(tmp_path, "time,apid,seq_count,x,\n1.0,1,0,5\n2.0,1,1,7\n")[0]
+        assert ds.metadata["wrong_width_rows"] == 0
+
+    @pytest.mark.parametrize("batch_size", [1, 2, 1000])
+    def test_the_form_is_one_decision_for_the_file(self, tmp_path: Path, batch_size: int) -> None:
+        rows = "".join(f"{i}.0,1,{i},5,6\n" for i in range(4)) + "9.0,1,9,5,6,\n"
+        batches = self._read(tmp_path, self.HEADER + rows, batch_size=batch_size)
+        assert sum(ds.metadata["wrong_width_rows"] for ds in batches) == 1
+
+    def test_the_decision_takes_a_bounded_look(self, tmp_path: Path) -> None:
+        rows = "".join(f"{i}.0,1,{i},5,6\n" for i in range(1000)) + "9e3,1,9,5,6,\n"
+        batches = self._read(tmp_path, self.HEADER + rows, batch_size=300)
+        assert sum(ds.metadata["wrong_width_rows"] for ds in batches) == 1
+        assert sum(ds.metadata["rows"] for ds in batches) == 1001
+
+    @pytest.mark.parametrize("cell", ["nan", "NaN", "inf", "-inf", "Infinity", "1e999"])
+    def test_a_time_that_is_not_finite_is_a_bad_row(self, tmp_path: Path, cell: str) -> None:
+        ds = self._read(tmp_path, f"{self.HEADER}1.0,1,0,5,6\n{cell},1,1,7,8\n")[0]
+        assert ds.metadata["skipped_rows"] == 1
+        assert [s.sample_time_tai for s in ds.parameters["x"].samples] == [1.0]
+
+    def test_a_repeated_column_fails(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError, match=r"repeats column names: \['x'\]"):
+            self._read(tmp_path, "time,apid,seq_count,x,x\n1.0,1,0,5,6\n")
+
+    def test_an_empty_file_fails(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError, match="CSV file is empty"):
+            self._read(tmp_path, "")
+
+    def test_a_header_with_no_rows_is_not_an_error(self, tmp_path: Path) -> None:
+        assert self._read(tmp_path, self.HEADER) == []
+
+    def test_a_stray_quote_in_the_last_column_fails(self, tmp_path: Path) -> None:
+        text = self.HEADER + '1.0,1,0,5,6\n2.0,1,1,5,"6\n3.0,1,2,5,6\n4.0,1,3,5,6\n'
+        with pytest.raises(ValueError, match="starting at line 3.*unclosed quote"):
+            self._read(tmp_path, text, batch_size=1)
+
+    def test_a_stray_quote_in_a_middle_column_fails(self, tmp_path: Path) -> None:
+        text = self.HEADER + '1.0,1,0,5,6\n2.0,1,"1,5,6\n3.0,1,2,5,6\n4.0,1,3,5,6\n'
+        with pytest.raises(ValueError, match="starting at line 3"):
+            self._read(tmp_path, text)
+
+    def test_a_file_cut_off_inside_a_quoted_cell_fails(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError, match="Malformed CSV"):
+            self._read(tmp_path, self.HEADER + '1.0,1,0,5,6\n2.0,1,1,5,"cut off')
+
+    def test_a_stray_quote_after_the_sample_fails_too(self, tmp_path: Path) -> None:
+        rows = "".join(f"{i}.0,1,{i},5,6\n" for i in range(1500))
+        with pytest.raises(ValueError, match="starting at line 1502"):
+            self._read(tmp_path, self.HEADER + rows + '2e3,1,1,"5,6\n2e3,1,2,5,6\n')
+
+    def test_bad_quoting_fails_the_run(self, tmp_path: Path) -> None:
+        path = tmp_path / "t.csv"
+        path.write_text(self.HEADER + '1.0,1,0,5,"6\n', encoding="utf-8")
+        extractor = CsvTelemetryExtractor(CsvExtractorConfig(path=path))
+        result = Pipeline(PipelineConfig(name="x"), extractor).run()
+        assert result.status == StageStatus.FAILED
+        assert "unclosed quote" in str(result.errors[0])
+
+    def test_good_quoting_still_reads(self, tmp_path: Path) -> None:
+        text = 'time,apid,seq_count,x\n1.0,1,0,"a,b"\n2.0,1,1,"two\nlines"\n3.0,1,2,"c"'
+        ds = self._read(tmp_path, text)[0]
+        assert [str(s.eng_value).split() for s in ds.parameters["x"].samples] == [
+            ["a,b"],
+            ["two", "lines"],
+            ["c"],
+        ]
 
     def test_wrong_widths_reach_the_result(self, tmp_path: Path) -> None:
         path = tmp_path / "t.csv"

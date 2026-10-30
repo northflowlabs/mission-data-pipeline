@@ -14,18 +14,29 @@ digit and "007" stays what it is. Without a declared type, a cell written as a p
 integer or a number becomes one, and anything else, such as "007", stays text.
 
 A row must have as many cells as the header. A row of another width is never shifted
-or padded: it is skipped and counted in ``wrong_width_rows``. A trailing delimiter is
-ignored when it appears on the header and on the row, and a file whose rows all end in
-one, under a header that does not, is read the same way.
+or padded: it is skipped and counted in ``wrong_width_rows``. Whether a trailing
+delimiter is part of the format is decided once per file: from the first 1000 rows, by
+whichever form most of them have, with the header settling a tie. Every row is then
+held to that one form, so in a file without trailing delimiters a row with one has the
+wrong width, and the other way round.
+
+A row whose time is not a finite number is skipped and counted in ``skipped_rows``.
+
+A file that is empty, repeats a column name or breaks the CSV quoting fails the run.
+Quoting is read strictly, so an unclosed quote or a file cut off inside a quoted cell
+cannot swallow the rows after it.
 """
 
 from __future__ import annotations
 
 import csv
+import math
 import re
+from collections import Counter
 from collections.abc import Iterator
+from itertools import chain, islice
 from pathlib import Path
-from typing import Annotated
+from typing import IO, Annotated
 
 from pydantic import BaseModel, Field
 
@@ -38,6 +49,7 @@ _PLAIN_INTEGER = re.compile(r"-?(0|[1-9][0-9]*)")
 _PLAIN_NUMBER = re.compile(r"-?((0|[1-9][0-9]*)(\.[0-9]*)?|\.[0-9]+)([eE][+-]?[0-9]+)?")
 _TRUE = {"1", "true"}
 _FALSE = {"0", "false"}
+_FORM_SAMPLE_ROWS = 1000
 
 
 class CsvExtractorConfig(BaseModel):
@@ -71,27 +83,50 @@ class CsvTelemetryExtractor(Extractor[CsvExtractorConfig]):
             raise FileNotFoundError(f"CSV file not found: {path}")
 
         with open(path, encoding="utf-8-sig", newline="") as fh:
-            reader = csv.reader(fh, delimiter=self.config.delimiter)
-            header = next(reader, None)
+            records = self._records(fh)
+            header = next(records, None)
             if header is None:
-                return
-            if header and not header[-1].strip():
+                raise ValueError(f"CSV file is empty: {path}")
+            header_trails = bool(header) and not header[-1].strip()
+            if header_trails:
                 header = header[:-1]
             self._check_columns(header)
 
+            rows = filter(None, records)
+            sample = list(islice(rows, _FORM_SAMPLE_ROWS))
+            trailing = _trailing_delimiter(header, sample, header_trails)
+
             batch: list[list[str]] = []
-            for row in reader:
-                if not row:
-                    continue
+            for row in chain(sample, rows):
                 batch.append(row)
                 if len(batch) >= self.config.batch_size:
-                    yield self._batch_to_dataset(header, batch)
+                    yield self._batch_to_dataset(header, batch, trailing)
                     batch = []
             if batch:
-                yield self._batch_to_dataset(header, batch)
+                yield self._batch_to_dataset(header, batch, trailing)
+
+    def _records(self, fh: IO[str]) -> Iterator[list[str]]:
+        """The file's records, with bad quoting as an error that says where it began."""
+        reader = csv.reader(fh, delimiter=self.config.delimiter, strict=True)
+        start = 1
+        while True:
+            try:
+                record = next(reader)
+            except StopIteration:
+                return
+            except csv.Error as exc:
+                raise ValueError(
+                    f"Malformed CSV in {self.config.path}, in the record starting at line "
+                    f"{start}: {exc}. An unclosed quote is the usual cause."
+                ) from exc
+            start = reader.line_num + 1
+            yield record
 
     def _check_columns(self, header: list[str]) -> None:
         cfg = self.config
+        repeated = sorted(name for name, count in Counter(header).items() if count > 1)
+        if repeated:
+            raise ValueError(f"CSV repeats column names: {repeated}")
         missing = {cfg.time_column, cfg.apid_column, cfg.seq_count_column} - set(header)
         if missing:
             raise ValueError(f"CSV is missing required columns: {missing}")
@@ -99,7 +134,9 @@ class CsvTelemetryExtractor(Extractor[CsvExtractorConfig]):
         if unknown:
             raise ValueError(f"CSV has no parameter columns: {unknown}")
 
-    def _batch_to_dataset(self, header: list[str], batch: list[list[str]]) -> TelemetryDataset:
+    def _batch_to_dataset(
+        self, header: list[str], batch: list[list[str]], trailing: bool
+    ) -> TelemetryDataset:
         cfg = self.config
         required = {cfg.time_column, cfg.apid_column, cfg.seq_count_column}
         param_cols = cfg.parameter_columns or [c for c in header if c not in required]
@@ -118,9 +155,9 @@ class CsvTelemetryExtractor(Extractor[CsvExtractorConfig]):
         skipped_rows = 0
         empty_cells = 0
         for cells in batch:
-            if len(cells) == len(header) + 1 and not cells[-1].strip():
+            if trailing and _ends_in_delimiter(cells, len(header)):
                 cells = cells[:-1]
-            if len(cells) != len(header):
+            elif trailing or len(cells) != len(header):
                 wrong_width_rows += 1
                 continue
             row = dict(zip(header, cells, strict=True))
@@ -130,6 +167,9 @@ class CsvTelemetryExtractor(Extractor[CsvExtractorConfig]):
                 apid = int(row[cfg.apid_column])
                 seq = int(row[cfg.seq_count_column])
             except ValueError:
+                skipped_rows += 1
+                continue
+            if not math.isfinite(tai):
                 skipped_rows += 1
                 continue
 
@@ -153,6 +193,17 @@ class CsvTelemetryExtractor(Extractor[CsvExtractorConfig]):
         dataset.metadata["skipped_rows"] = skipped_rows
         dataset.metadata["empty_cells"] = empty_cells
         return dataset
+
+
+def _ends_in_delimiter(cells: list[str], width: int) -> bool:
+    return len(cells) == width + 1 and not cells[-1].strip()
+
+
+def _trailing_delimiter(header: list[str], sample: list[list[str]], header_trails: bool) -> bool:
+    """Whether this file's rows end in a delimiter, by the form most of them have."""
+    plain = sum(len(cells) == len(header) for cells in sample)
+    marked = sum(_ends_in_delimiter(cells, len(header)) for cells in sample)
+    return marked > plain or (header_trails and marked == plain)
 
 
 def _convert(text: str, declared: ParameterType | None, column: str) -> int | float | bool | str:
