@@ -259,5 +259,5 @@ def _parse_transformer_configs(
 
 
 def _load_json(path: Path) -> dict[str, Any]:
-    with open(path) as fh:
+    with open(path, encoding="utf-8") as fh:
         return json.load(fh)  # type: ignore[no-any-return]

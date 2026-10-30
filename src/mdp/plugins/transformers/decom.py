@@ -54,7 +54,19 @@ class ParameterDefinition(BaseModel):
     @model_validator(mode="after")
     def _check_layout(self) -> ParameterDefinition:
         byte_aligned = self.bit_offset == 0 and self.bit_length % 8 == 0
-        if self.param_type in (ParameterType.UINT, ParameterType.INT, ParameterType.BOOLEAN):
+        float_lengths = {ParameterType.FLOAT: 32, ParameterType.DOUBLE: 64}
+        expected = float_lengths.get(self.param_type)
+        if expected is not None and self.bit_length != expected:
+            raise ValueError(
+                f"{self.name}: a {self.param_type.value} field is {expected} bits, "
+                f"not {self.bit_length}"
+            )
+        if self.param_type in (
+            ParameterType.UINT,
+            ParameterType.INT,
+            ParameterType.BOOLEAN,
+            ParameterType.ENUMERATED,
+        ):
             if self.little_endian and not byte_aligned:
                 raise ValueError(f"{self.name}: a little-endian field must be byte-aligned")
             return self
@@ -80,6 +92,7 @@ class DecomTransformer(Transformer[DecomConfig]):
             self._apid_map.setdefault(pdef.apid, []).append(pdef)
 
     def transform(self, dataset: TelemetryDataset) -> TelemetryDataset:
+        short_packets = 0
         for packet in dataset.iter_packets():
             defs = self._apid_map.get(packet.apid)
             if defs is None:
@@ -88,8 +101,13 @@ class DecomTransformer(Transformer[DecomConfig]):
                 continue
             for pdef in defs:
                 param = self._extract_parameter(packet, pdef)
-                if param is not None:
+                if param is None:
+                    short_packets += 1
+                else:
                     dataset.add_parameter(param)
+        if short_packets:
+            count = dataset.metadata.get("short_packets", 0)
+            dataset.metadata["short_packets"] = int(count) + short_packets  # type: ignore[call-overload]
         return dataset
 
     def _extract_parameter(

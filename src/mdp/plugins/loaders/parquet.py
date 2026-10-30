@@ -6,6 +6,7 @@ Schema uses ``pyarrow`` for efficient columnar storage with Snappy compression.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pandas as pd
@@ -16,6 +17,8 @@ from pydantic import BaseModel, Field
 from mdp.core.base import Loader
 from mdp.core.registry import registry
 from mdp.models.dataset import TelemetryDataset
+
+_UNITS_KEY = b"mdp_units"
 
 
 class ParquetLoaderConfig(BaseModel):
@@ -75,14 +78,24 @@ class ParquetLoader(Loader[ParquetLoaderConfig]):
         self._write_df(
             df.reset_index().rename(columns={"index": "time_tai"}),
             self.config.output_dir / "telemetry.parquet",
+            units=df.attrs.get("units"),
         )
 
-    def _write_df(self, df: pd.DataFrame, path: Path) -> None:
+    def _write_df(self, df: pd.DataFrame, path: Path, units: dict[str, str] | None = None) -> None:
+        df = df.copy()
+        df.attrs = {}
         table = pa.Table.from_pandas(df, preserve_index=False)
         # overwrite replaces earlier runs; batches of the same run accumulate.
         keep_existing = path in self._written or not self.config.overwrite
         if path.exists() and keep_existing:
             existing = pq.read_table(path)
-            table = pa.concat_tables([existing, table], promote_options="default")
+            # An integer column can meet floats in a later batch; permissive widens it.
+            table = pa.concat_tables([existing, table], promote_options="permissive")
+            old_units = (existing.schema.metadata or {}).get(_UNITS_KEY)
+            if old_units:
+                units = {**json.loads(old_units), **(units or {})}
+        if units:
+            metadata = {**(table.schema.metadata or {}), _UNITS_KEY: json.dumps(units)}
+            table = table.replace_schema_metadata(metadata)
         pq.write_table(table, path, compression=self.config.compression)
         self._written.add(path)

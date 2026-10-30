@@ -70,7 +70,9 @@ class CsvLoader(Loader[CsvLoaderConfig]):
         if df.empty:
             return
         out_path = self.config.output_dir / "telemetry.csv"
+        units = df.attrs.get("units", {})
         wide = df.reset_index().rename(columns={"index": "time_tai"})
+        wide = wide.rename(columns={name: f"{name} [{unit}]" for name, unit in units.items()})
         keep_existing = out_path in self._written or not self.config.overwrite
         if keep_existing and out_path.exists():
             existing = pd.read_csv(out_path, sep=self.config.delimiter)

@@ -21,6 +21,10 @@ from mdp.observability.metrics import PipelineMetrics
 
 log = structlog.get_logger(__name__)
 
+# Dataset metadata counters that mean data was lost: skipped_frames from the binary
+# extractor, short_packets from decom.
+_DATA_ISSUES = ("skipped_frames", "short_packets")
+
 
 @dataclass
 class PipelineConfig:
@@ -43,6 +47,7 @@ class PipelineResult:
     batches_processed: int
     total_packets: int
     total_samples: int = 0
+    data_issues: dict[str, int] = field(default_factory=dict)
     stage_results: list[StageResult] = field(default_factory=list)
     errors: list[Exception] = field(default_factory=list)
 
@@ -58,6 +63,7 @@ class PipelineResult:
             f"  packets   : {self.total_packets}",
             f"  samples   : {self.total_samples}",
         ]
+        lines += [f"  {name} : {count}" for name, count in self.data_issues.items()]
         if self.errors:
             lines.append(f"  errors    : {len(self.errors)}")
         for r in self.stage_results:
@@ -119,6 +125,7 @@ class Pipeline:
         batches = 0
         total_packets = 0
         total_samples = 0
+        data_issues: dict[str, int] = {}
 
         log.info(
             "pipeline.start",
@@ -141,6 +148,10 @@ class Pipeline:
                 errors.extend(t_errors)
                 for t_result in t_results:
                     self._record_stage(t_result)
+                for issue in _DATA_ISSUES:
+                    count = dataset.metadata.get(issue)
+                    if isinstance(count, int) and count:
+                        data_issues[issue] = data_issues.get(issue, 0) + count
                 self.hooks.fire("batch.transformed", dataset)
 
                 if t_errors and self.config.stop_on_error:
@@ -183,9 +194,13 @@ class Pipeline:
             batches_processed=batches,
             total_packets=total_packets,
             total_samples=total_samples,
+            data_issues=data_issues,
             stage_results=all_stage_results,
             errors=errors,
         )
+
+        if data_issues:
+            log.warning("pipeline.data_issues", pipeline=self.config.name, **data_issues)
 
         log.info(
             "pipeline.complete",

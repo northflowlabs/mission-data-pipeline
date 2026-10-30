@@ -1,7 +1,7 @@
 """CSV telemetry extractor: reads pre-processed telemetry CSV files.
 
 Expected columns (configurable):
-  - ``time``: TAI seconds since J2000 (float)
+  - ``time``: TAI seconds since J2000.0, 2000-01-01T12:00:00 TT (float)
   - ``apid``: Application Process Identifier (int)
   - ``seq_count``: packet sequence count (int)
   - ``<param_N>``: any number of parameter columns

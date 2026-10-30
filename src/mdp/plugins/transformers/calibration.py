@@ -87,33 +87,35 @@ class CalibrationTransformer(Transformer[CalibrationConfig]):
         for name, record in dataset.parameters.items():
             cal = self._cal_map.get(name)
             if cal is None:
+                if self.config.mark_uncalibrated_invalid:
+                    invalid = [s.model_copy(update={"validity": False}) for s in record.samples]
+                    object.__setattr__(record, "samples", invalid)
                 continue
 
             calibrated: list[EngineeringParameter] = []
+            all_calibrated = True
             for sample in record.samples:
                 try:
                     raw = float(sample.raw_value)  # type: ignore[arg-type]
-                    eng = cal.apply(raw)
-                    calibrated.append(
-                        EngineeringParameter(
-                            name=sample.name,
-                            apid=sample.apid,
-                            seq_count=sample.seq_count,
-                            sample_time_tai=sample.sample_time_tai,
-                            raw_value=sample.raw_value,
-                            eng_value=eng,
-                            unit=cal.unit or sample.unit,
-                            validity=sample.validity,
-                            calibration_id=cal.method,
-                            out_of_limit=sample.out_of_limit,
-                            alarm_level=sample.alarm_level,
-                        )
-                    )
                 except (TypeError, ValueError):
+                    all_calibrated = False
+                    if self.config.mark_uncalibrated_invalid:
+                        sample = sample.model_copy(update={"validity": False})
                     calibrated.append(sample)
+                    continue
+                calibrated.append(
+                    sample.model_copy(
+                        update={
+                            "eng_value": cal.apply(raw),
+                            "unit": cal.unit or sample.unit,
+                            "calibration_id": cal.method.value,
+                        }
+                    )
+                )
 
             object.__setattr__(record, "samples", calibrated)
-            if cal.unit:
+            # The record's unit stays true: samples that were not converted keep theirs.
+            if cal.unit and all_calibrated:
                 object.__setattr__(record, "unit", cal.unit)
 
         return dataset

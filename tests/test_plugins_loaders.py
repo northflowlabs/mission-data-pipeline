@@ -177,7 +177,7 @@ class TestCsvLoader:
         out = tmp_path / "telemetry.csv"
         assert out.exists()
         df = pd.read_csv(out)
-        assert "p1" in df.columns
+        assert "p1 [degC]" in df.columns
 
     def test_append_mode(self, tmp_path: Path) -> None:
         ds1 = _make_dataset(n=3)

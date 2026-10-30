@@ -12,6 +12,11 @@ from mdp.models.packet import TelemetryPacket
 from mdp.models.parameter import EngineeringParameter, ParameterRecord
 
 
+def _check_units(name: str, first: str | None, second: str | None) -> None:
+    if first and second and first != second:
+        raise ValueError(f"Parameter '{name}' mixes units: {first} and {second}")
+
+
 @dataclass
 class TelemetryDataset:
     """Container for a batch of telemetry data flowing through the pipeline.
@@ -45,6 +50,7 @@ class TelemetryDataset:
         if param.name not in self.parameters:
             self.parameters[param.name] = ParameterRecord(name=param.name, unit=param.unit)
         record = self.parameters[param.name]
+        _check_units(param.name, record.unit, param.unit)
         object.__setattr__(
             record,
             "samples",
@@ -108,7 +114,9 @@ class TelemetryDataset:
             frames[name] = pd.Series([s.eng_value for s in record.samples], index=times, name=name)
         if not frames:
             return pd.DataFrame()
-        return pd.DataFrame(frames).sort_index()
+        wide = pd.DataFrame(frames).sort_index()
+        wide.attrs["units"] = {n: r.unit for n, r in self.parameters.items() if r.unit}
+        return wide
 
     # ------------------------------------------------------------------ #
     #  Dunder helpers                                                       #
@@ -134,10 +142,12 @@ class TelemetryDataset:
         for source in (self, other):
             for name, record in source.parameters.items():
                 existing = merged.parameters.get(name)
+                if existing:
+                    _check_units(name, existing.unit, record.unit)
                 samples = existing.samples + record.samples if existing else record.samples
                 merged.parameters[name] = ParameterRecord(
                     name=name,
-                    unit=existing.unit if existing else record.unit,
+                    unit=(existing.unit or record.unit) if existing else record.unit,
                     samples=list(samples),
                 )
         return merged

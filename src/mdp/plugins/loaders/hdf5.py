@@ -2,17 +2,21 @@
 
 Data layout
 -----------
-All parameters from one dataset batch are written to a single HDF5 file.
-The group hierarchy is::
+All parameters from one run are written to a single HDF5 file. The group
+hierarchy is::
 
     /telemetry/
         <param_name>/
-            time_tai    (float64 dataset)
-            eng_value   (float64 | string dataset)
-            raw_value   (as-stored)
-            apid        (int32 dataset)
-            seq_count   (int32 dataset)
-            attrs:      unit, validity_count, apid_list
+            time_tai       (float64 dataset)
+            eng_value      (int64, uint64, float64 or bool dataset), or
+            eng_value_str  (string dataset), according to the values' type
+            apid           (int32 dataset)
+            seq_count      (int32 dataset)
+            validity       (uint8 dataset)
+            attrs:         unit
+
+Values are stored by their type. Text stays text, even when it looks like a number,
+and integers are not passed through float64, so 64-bit counters keep every digit.
 
 This layout is directly compatible with tools like HDFView, h5py, and xarray.
 """
@@ -101,17 +105,22 @@ class HDF5Loader(Loader[HDF5LoaderConfig]):
 
         # Every column of a parameter must stay the same length, so the value column
         # is settled before anything is written.
-        eng_arr = self._coerce_numeric(eng_values)
-        if eng_arr is None and "eng_value" in grp:
+        typed = _typed_values(eng_values)
+        if typed is None and "eng_value" in grp:
             raise ValueError(f"Parameter '{name}' has numeric samples and now non-numeric ones")
+        if typed is not None and "eng_value" in grp and not _fits(typed, grp["eng_value"].dtype):
+            raise ValueError(
+                f"Parameter '{name}': {typed.dtype} values do not fit its "
+                f"{grp['eng_value'].dtype} column"
+            )
 
         self._append_or_create(grp, "time_tai", times, dtype=np.float64)
         self._append_or_create(grp, "apid", apids, dtype=np.int32)
         self._append_or_create(grp, "seq_count", seqs, dtype=np.int32)
         self._append_or_create(grp, "validity", validity, dtype=np.uint8)
 
-        if eng_arr is not None and "eng_value_str" not in grp:
-            self._append_or_create(grp, "eng_value", eng_arr, dtype=np.float64)
+        if typed is not None and "eng_value_str" not in grp:
+            self._append_or_create(grp, "eng_value", typed)
         else:
             encoded = np.array([str(v) for v in eng_values], dtype=h5py.string_dtype())
             self._append_or_create(grp, "eng_value_str", encoded)
@@ -144,10 +153,27 @@ class HDF5Loader(Loader[HDF5LoaderConfig]):
             ds.resize(new_size, axis=0)
             ds[old_size:] = data
 
-    @staticmethod
-    def _coerce_numeric(values: Sequence[object]) -> NDArray[np.float64] | None:
-        try:
-            arr: NDArray[np.float64] = np.array(values, dtype=np.float64)
-            return arr
-        except (TypeError, ValueError):
-            return None
+
+def _typed_values(values: Sequence[object]) -> NDArray[np.generic] | None:
+    """An array of the values' own type, or None for anything that is not numeric."""
+    if all(isinstance(v, bool) for v in values):
+        return np.array(values, dtype=np.bool_)
+    if any(isinstance(v, bool) or not isinstance(v, (int, float)) for v in values):
+        return None
+    if all(isinstance(v, int) for v in values):
+        integers = [int(v) for v in values]  # type: ignore[call-overload]
+        return np.array(integers, dtype=np.uint64 if max(integers) >= 2**63 else np.int64)
+    return np.array(values, dtype=np.float64)
+
+
+def _fits(values: NDArray[np.generic], column: np.dtype[np.generic]) -> bool:
+    """Whether every value keeps its exact meaning in the existing column."""
+    if values.dtype == column:
+        return True
+    if column == np.float64 and values.dtype.kind in "iu":
+        return bool(np.all(np.abs(values.astype(np.float64)) <= 2**53))
+    if column == np.int64 and values.dtype == np.uint64:
+        return False
+    if column == np.uint64 and values.dtype == np.int64:
+        return bool(np.all(values.astype(np.int64) >= 0))
+    return False

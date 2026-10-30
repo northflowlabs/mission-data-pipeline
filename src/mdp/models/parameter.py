@@ -31,7 +31,7 @@ class RawParameter(BaseModel):
     name: str
     apid: int
     seq_count: int
-    sample_time_tai: float = Field(description="TAI seconds since J2000")
+    sample_time_tai: float = Field(description="TAI seconds since J2000.0 (12:00 TT), or NaN")
     raw_value: RawValue
     param_type: ParameterType
     bit_offset: int | None = None

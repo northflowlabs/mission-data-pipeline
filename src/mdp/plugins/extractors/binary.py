@@ -47,9 +47,8 @@ class BinaryExtractorConfig(BaseModel):
     sec_hdr_length: Annotated[int, Field(ge=0)] = Field(
         default=0,
         description=(
-            "Secondary header length in bytes (mission-specific). "
-            "Common values: 4 (CDS short), 10 (CUC with fine time). "
-            "Per CCSDS 133.0-B-2 the format is not standardised at the Space Packet layer."
+            "Secondary header length in bytes. It is mission-specific: "
+            "CCSDS 133.0-B-2 does not fix its format at the Space Packet layer."
         ),
     )
     frame_sync: bool = Field(

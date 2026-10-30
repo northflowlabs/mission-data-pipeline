@@ -36,7 +36,7 @@ class CCSDSPrimaryHeader(BaseModel):
 
     Bit layout (48 bits total):
         [3]  version: always 0b000
-        [1]  type: 0=telemetry, 1=telecommand
+        [1]  type: 0=telemetry (reporting), 1=telecommand (requesting)
         [1]  sec_hdr: secondary header present flag
         [11] apid: Application Process Identifier
         [2]  seq_flags: sequence flags
@@ -99,7 +99,7 @@ class TelemetryPacket(BaseModel):
     user_data: bytes = Field(repr=False)
     source_time_tai: float | None = Field(
         default=None,
-        description="Source packet time in TAI seconds since J2000",
+        description="Source packet time in TAI seconds since J2000.0 (12:00 TT)",
     )
     ground_receipt_time: float | None = Field(
         default=None,
@@ -149,8 +149,7 @@ class TelemetryPacket(BaseModel):
             Length of the secondary header in bytes.  This is mission-specific
             and must be provided by the caller when ``sec_hdr_flag`` is set.
             Per CCSDS 133.0-B-2, the secondary header format is not standardised
-            at the Space Packet layer; common values are 4 (CDS short) or
-            10 (CUC with fine time).  Defaults to 0 (no secondary header parsed).
+            at the Space Packet layer.  Defaults to 0 (no secondary header parsed).
         """
         header = CCSDSPrimaryHeader.from_bytes(raw[:6])
         data_field = raw[6 : 6 + header.packet_data_length]
