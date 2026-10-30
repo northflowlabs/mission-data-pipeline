@@ -9,7 +9,7 @@ from mdp.observability.logging import configure_logging, get_logger
 
 configure_logging(level="INFO", fmt="json")
 log = get_logger(__name__)
-log.info("ingest.start", file="telemetry.bin")
+log.info("ingest.start", file="cygnss.tlm")
 ```
 
 | Argument | Values | Effect |
@@ -37,20 +37,28 @@ For a single run, the `PipelineResult` from `Pipeline.run()` already carries cou
 
 ## Event hooks
 
-`HookManager` is a small publish and subscribe registry. Handlers that raise are ignored, so a failing handler cannot stop the caller.
+`HookManager` is a small publish and subscribe registry. Pass one to `Pipeline`. Handlers that raise are ignored, so a failing handler cannot stop the pipeline.
 
 ```python
+from mdp.core.pipeline import Pipeline, PipelineConfig
 from mdp.observability.hooks import HookManager
 
 hooks = HookManager()
 
 @hooks.on("batch.loaded")
-def on_loaded(dataset):
-    print(f"loaded {len(dataset)} packets")
+def on_loaded(dataset, result):
+    print(f"{result.stage_name} wrote {dataset.sample_count()} samples")
 
-hooks.fire("batch.loaded", dataset)
+pipeline = Pipeline(PipelineConfig(name="hk"), extractor, loader=loader, hooks=hooks)
 ```
 
-The predefined event names are `pipeline.start`, `pipeline.complete`, `batch.extracted`, `batch.transformed`, `batch.loaded` and `stage.error`. Any other name also works.
+| Event | Arguments | Fired |
+|---|---|---|
+| `pipeline.start` | name | Before the first batch |
+| `batch.extracted` | dataset | After each extractor yield |
+| `batch.transformed` | dataset | After the transformers have run on a batch |
+| `batch.loaded` | dataset, stage result | After the loader has written a batch |
+| `stage.error` | stage name, exception | When any stage fails |
+| `pipeline.complete` | pipeline result | After the run, also a failed one |
 
-In version 0.1.0, `Pipeline` does not fire these events itself. Fire them from your own code, for example from a custom loader.
+`Pipeline.metrics` holds the batch, packet and per-stage counters of the pipeline.

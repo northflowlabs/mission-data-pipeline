@@ -58,51 +58,73 @@ pip install -e ".[dev]"
 ### Parse a raw CCSDS Space Packet
 
 ```python
+from pathlib import Path
+
 from mdp.models.packet import TelemetryPacket
 
-# 6-byte primary header + 4-byte secondary header + 4-byte user data
-raw = bytes.fromhex("08010000000700000000DEADBEEF")
-packet = TelemetryPacket.from_bytes(raw, sec_hdr_length=4)
-print(f"APID: 0x{packet.apid:04X}  seq: {packet.seq_count}  data: {packet.user_data.hex()}")
+# Real Level 0 telemetry from the NASA CYGNSS F7 satellite, in examples/data
+raw = Path("examples/data/CYGNSS_F7_L0_2022_086_10_15_V01_F__first101pkts.tlm").read_bytes()
+
+# from_bytes reads the first packet; CYGNSS has a 10-byte secondary header
+packet = TelemetryPacket.from_bytes(raw, sec_hdr_length=10)
+print(f"APID: {packet.apid}  seq: {packet.seq_count}  user data: {len(packet.user_data)} bytes")
 ```
 
 ### Run a full ingest pipeline
 
 ```python
 from pathlib import Path
+
 from mdp.core.pipeline import Pipeline, PipelineConfig
 from mdp.models.parameter import ParameterType
-from mdp.plugins.extractors.binary import BinaryPacketExtractor, BinaryExtractorConfig
-from mdp.plugins.transformers.decom import DecomTransformer, DecomConfig, ParameterDefinition
-from mdp.plugins.transformers.calibration import (
-    CalibrationTransformer, CalibrationConfig, CalibrationEntry, CalibrationMethod,
-)
+from mdp.plugins.extractors.binary import BinaryExtractorConfig, BinaryPacketExtractor
 from mdp.plugins.loaders.parquet import ParquetLoader, ParquetLoaderConfig
+from mdp.plugins.transformers.calibration import (
+    CalibrationConfig,
+    CalibrationEntry,
+    CalibrationMethod,
+    CalibrationTransformer,
+)
+from mdp.plugins.transformers.decom import DecomConfig, DecomTransformer, ParameterDefinition
 
 pipeline = Pipeline(
-    config=PipelineConfig(name="hk-ingest"),
-    extractor=BinaryPacketExtractor(BinaryExtractorConfig(
-        path=Path("telemetry.bin"),
-        batch_size=256,
-        apid_filter=[0x100],
-        sec_hdr_length=4,           # CDS short time code (mission-specific)
-    )),
+    config=PipelineConfig(name="cygnss-gps-time"),
+    extractor=BinaryPacketExtractor(
+        BinaryExtractorConfig(
+            path=Path("examples/data/CYGNSS_F7_L0_2022_086_10_15_V01_F__first101pkts.tlm"),
+            batch_size=256,
+            apid_filter=[1313],  # packets carrying GPS time
+            sec_hdr_length=10,
+        )
+    ),
     transformers=[
-        DecomTransformer(DecomConfig(parameters=[
-            ParameterDefinition(
-                name="obc_temp", apid=0x100,
-                byte_offset=0, bit_length=16,
-                param_type=ParameterType.UINT, unit="DN",
-            ),
-        ])),
-        CalibrationTransformer(CalibrationConfig(calibrations=[
-            CalibrationEntry(
-                parameter_name="obc_temp",
-                method=CalibrationMethod.POLYNOMIAL,
-                coefficients=[-55.0, 0.044],
-                unit="degC",
-            ),
-        ])),
+        DecomTransformer(
+            DecomConfig(
+                parameters=[
+                    ParameterDefinition(
+                        name="gps_seconds",
+                        apid=1313,
+                        byte_offset=6,
+                        bit_length=64,
+                        param_type=ParameterType.DOUBLE,
+                        unit="s",
+                        little_endian=True,
+                    ),
+                ]
+            )
+        ),
+        CalibrationTransformer(
+            CalibrationConfig(
+                calibrations=[
+                    CalibrationEntry(
+                        parameter_name="gps_seconds",
+                        method=CalibrationMethod.POLYNOMIAL,
+                        coefficients=[0.0, 1 / 3600],  # seconds to hours of the GPS week
+                        unit="h",
+                    ),
+                ]
+            )
+        ),
     ],
     loader=ParquetLoader(ParquetLoaderConfig(output_dir=Path("output/"))),
 )
@@ -118,13 +140,14 @@ print(result.summary())
 mdp stages
 
 # Inspect a raw binary telemetry file
-mdp inspect telemetry.bin --max-packets 50 --apid 256
+mdp inspect examples/data/CYGNSS_F7_L0_2022_086_10_15_V01_F__first101pkts.tlm --max-packets 50 --apid 1313
 
 # Run a pipeline from JSON config files
 mdp run \
   --extractor binary \
   --extractor-config extractor.json \
-  --transformer apid_filter \
+  --transformer decom \
+  --transformer-config decom=decom.json \
   --loader parquet \
   --loader-config loader.json \
   --pipeline-name hk-ingest
@@ -135,6 +158,22 @@ mdp run --extractor csv --extractor-config cfg.json --dry-run
 # Print version
 mdp version
 ```
+
+`extractor.json`, `decom.json` and `loader.json` hold the fields of each stage's config model:
+
+```json
+{"path": "examples/data/CYGNSS_F7_L0_2022_086_10_15_V01_F__first101pkts.tlm", "sec_hdr_length": 10, "apid_filter": [1313]}
+```
+
+```json
+{"parameters": [{"name": "gps_seconds", "apid": 1313, "byte_offset": 6, "bit_length": 64, "param_type": "double", "unit": "s", "little_endian": true}]}
+```
+
+```json
+{"output_dir": "output"}
+```
+
+Binary packets carry no parameters until `decom` decodes them. A run that gives the loader nothing to write exits with status 1.
 
 ## Architecture
 
@@ -211,6 +250,8 @@ Supports `from_bytes()` / `to_bytes()` round-trip with full validation.
 
 `from_bytes(raw, sec_hdr_length=N)` accepts a mission-specific secondary header length rather than assuming a fixed value.
 
+MDP does not decode secondary headers, because their format is mission-specific. Set `source_time_tai` from yours in a transformer ahead of `decom`, as `examples/01_binary_ingest.py` does; without it, the `time_tai` of decommutated samples holds the sequence count as an ordering key.
+
 ### `TelemetryDataset`
 
 The mutable batch container passed between pipeline stages:
@@ -257,25 +298,30 @@ class UDPExtractor(Extractor[UDPConfig]):
 ### Attach event hooks for monitoring
 
 ```python
+from mdp.core.pipeline import Pipeline, PipelineConfig
 from mdp.observability.hooks import HookManager
 
 hooks = HookManager()
 
 @hooks.on("batch.loaded")
 def on_loaded(dataset, result):
-    prometheus_counter.inc(len(dataset))
+    print(f"{result.stage_name} wrote {dataset.sample_count()} samples")
 
 @hooks.on("stage.error")
 def on_error(stage_name, exc):
-    pagerduty_alert(f"Pipeline stage '{stage_name}' failed: {exc}")
+    print(f"Pipeline stage '{stage_name}' failed: {exc}")
+
+pipeline = Pipeline(PipelineConfig(name="hk"), extractor, loader=loader, hooks=hooks)
 ```
+
+The pipeline fires `pipeline.start(name)`, `batch.extracted(dataset)`, `batch.transformed(dataset)`, `batch.loaded(dataset, stage_result)`, `stage.error(stage_name, exception)` and `pipeline.complete(result)`. A handler that raises is ignored, so a failing handler cannot stop the pipeline.
 
 ## Examples
 
 | Script | Description |
 |---|---|
-| [`examples/01_binary_ingest.py`](examples/01_binary_ingest.py) | Synthetic HK binary → Decom → Polynomial calibration → Parquet |
-| [`examples/02_csv_to_hdf5.py`](examples/02_csv_to_hdf5.py) | CSV engineering telemetry → Calibration → HDF5 |
+| [`examples/01_binary_ingest.py`](examples/01_binary_ingest.py) | NASA CYGNSS Level 0 packets → packet time → Decom → Polynomial calibration → Parquet |
+| [`examples/02_csv_to_hdf5.py`](examples/02_csv_to_hdf5.py) | ESA OPS-SAT telemetry from CSV → HDF5 |
 
 Run directly:
 
@@ -284,7 +330,7 @@ python -m examples.01_binary_ingest
 python -m examples.02_csv_to_hdf5
 ```
 
-Both examples generate their own synthetic test data and require no external files.
+Both examples read real spacecraft telemetry from [`examples/data`](examples/data/README.md), which also gives its sources and licences.
 
 ## Testing
 
@@ -299,7 +345,7 @@ pytest -v --cov=mdp --cov-report=term-missing
 pytest tests/test_models_packet.py -v
 ```
 
-Current coverage: **82% overall**, >95% for `models/` and `observability/`.
+Current coverage: **90% overall**.
 
 ## Roadmap
 

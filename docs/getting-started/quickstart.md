@@ -3,19 +3,23 @@
 ## Parse one CCSDS Space Packet
 
 ```python
+from pathlib import Path
+
 from mdp.models.packet import TelemetryPacket
 
-# 6-byte primary header + 4-byte secondary header + 4-byte user data
-raw = bytes.fromhex("08010000000700000000DEADBEEF")
-packet = TelemetryPacket.from_bytes(raw, sec_hdr_length=4)
-print(f"APID: 0x{packet.apid:04X}  seq: {packet.seq_count}  data: {packet.user_data.hex()}")
+# Real Level 0 telemetry from the NASA CYGNSS F7 satellite, in examples/data
+raw = Path("examples/data/CYGNSS_F7_L0_2022_086_10_15_V01_F__first101pkts.tlm").read_bytes()
+
+# from_bytes reads the first packet; CYGNSS has a 10-byte secondary header
+packet = TelemetryPacket.from_bytes(raw, sec_hdr_length=10)
+print(f"APID: {packet.apid}  seq: {packet.seq_count}  user data: {len(packet.user_data)} bytes")
 ```
 
 `sec_hdr_length` is mission specific. MDP does not assume a fixed secondary header length.
 
 ## Run a pipeline
 
-This pipeline reads housekeeping packets from APID 0x100, decommutates one 16-bit parameter, applies a polynomial calibration and writes Parquet.
+This pipeline reads the packets of APID 1313 from real CYGNSS telemetry, decommutates the 64-bit GPS seconds, converts them to hours of the GPS week and writes Parquet.
 
 ```python
 from pathlib import Path
@@ -33,13 +37,13 @@ from mdp.plugins.transformers.calibration import (
 from mdp.plugins.transformers.decom import DecomConfig, DecomTransformer, ParameterDefinition
 
 pipeline = Pipeline(
-    config=PipelineConfig(name="hk-ingest"),
+    config=PipelineConfig(name="cygnss-gps-time"),
     extractor=BinaryPacketExtractor(
         BinaryExtractorConfig(
-            path=Path("telemetry.bin"),
+            path=Path("examples/data/CYGNSS_F7_L0_2022_086_10_15_V01_F__first101pkts.tlm"),
             batch_size=256,
-            apid_filter=[0x100],
-            sec_hdr_length=4,
+            apid_filter=[1313],  # packets carrying GPS time
+            sec_hdr_length=10,
         )
     ),
     transformers=[
@@ -47,12 +51,13 @@ pipeline = Pipeline(
             DecomConfig(
                 parameters=[
                     ParameterDefinition(
-                        name="obc_temp",
-                        apid=0x100,
-                        byte_offset=0,
-                        bit_length=16,
-                        param_type=ParameterType.UINT,
-                        unit="DN",
+                        name="gps_seconds",
+                        apid=1313,
+                        byte_offset=6,
+                        bit_length=64,
+                        param_type=ParameterType.DOUBLE,
+                        unit="s",
+                        little_endian=True,
                     ),
                 ]
             )
@@ -61,10 +66,10 @@ pipeline = Pipeline(
             CalibrationConfig(
                 calibrations=[
                     CalibrationEntry(
-                        parameter_name="obc_temp",
+                        parameter_name="gps_seconds",
                         method=CalibrationMethod.POLYNOMIAL,
-                        coefficients=[-55.0, 0.044],
-                        unit="degC",
+                        coefficients=[0.0, 1 / 3600],  # seconds to hours of the GPS week
+                        unit="h",
                     ),
                 ]
             )
@@ -81,7 +86,7 @@ print(result.summary())
 
 ## Run the bundled examples
 
-Both examples generate their own synthetic input and need no external files. Run them from the project root:
+Both examples read real spacecraft telemetry from `examples/data`. Run them from the project root:
 
 ```bash
 python -m examples.01_binary_ingest

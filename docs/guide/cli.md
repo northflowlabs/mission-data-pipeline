@@ -24,7 +24,7 @@ Lists the registered extractors, transformers and loaders.
 Reads a raw binary telemetry file and prints packet summaries.
 
 ```bash
-mdp inspect telemetry.bin --max-packets 50 --apid 256
+mdp inspect examples/data/CYGNSS_F7_L0_2022_086_10_15_V01_F__first101pkts.tlm --max-packets 50 --apid 1313
 ```
 
 | Option | Default | Effect |
@@ -40,7 +40,8 @@ Builds a pipeline from registered stage names and runs it.
 mdp run \
   --extractor binary \
   --extractor-config extractor.json \
-  --transformer apid_filter \
+  --transformer decom \
+  --transformer-config decom=decom.json \
   --loader parquet \
   --loader-config loader.json \
   --pipeline-name hk-ingest
@@ -51,14 +52,27 @@ mdp run \
 | `--extractor` | Extractor name, required |
 | `--extractor-config` | JSON file with the extractor config |
 | `--transformer` | Transformer name. Repeatable, applied in order |
+| `--transformer-config` | `NAME=FILE`: JSON file with that transformer's config. Repeatable |
 | `--loader` | Loader name |
 | `--loader-config` | JSON file with the loader config |
 | `--pipeline-name` | Run label, default `mdp-run` |
 | `--dry-run` | Extract and transform only, write nothing |
 | `--max-batches` | Stop after this many batches |
 
-The JSON files hold the fields of the stage config model, for example `{"path": "telemetry.bin", "sec_hdr_length": 4}` for `binary` and `{"output_dir": "output"}` for `parquet`.
+The JSON files hold the fields of each stage's config model:
 
-Transformers are built with their default config. `decom` and `calibration` need parameter and calibration definitions, so use them from Python, as in the [quick start](../getting-started/quickstart.md).
+```json
+{"path": "examples/data/CYGNSS_F7_L0_2022_086_10_15_V01_F__first101pkts.tlm", "sec_hdr_length": 10, "apid_filter": [1313]}
+```
 
-The command exits with status 1 when the run fails.
+```json
+{"parameters": [{"name": "gps_seconds", "apid": 1313, "byte_offset": 6, "bit_length": 64, "param_type": "double", "unit": "s", "little_endian": true}]}
+```
+
+```json
+{"output_dir": "output"}
+```
+
+Binary packets carry no parameters until `decom` decodes them.
+
+The command exits with status 1 when the run fails, and when a run gives the loader nothing to write.

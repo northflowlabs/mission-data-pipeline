@@ -10,10 +10,16 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ## [Unreleased]
 
 ### Fixed
+- Parquet, CSV and HDF5 loaders keep every batch of a run. Each batch used to overwrite the last with the default settings, so only the final batch survived
+- `Pipeline` fires the hooks the documentation describes; pass a `HookManager` as `hooks`
+- `mdp run` exits with status 1 when a run gives the loader nothing to write, instead of reporting success with no output
 - `configure_logging()` no longer fails on the first log call, and `fmt="json"` now produces JSON lines
 - `mdp stages` and `mdp run` now see the built-in stages
 
 ### Added
+- `mdp run --transformer-config NAME=FILE` configures transformers such as `decom` from the command line
+- `Pipeline.metrics`, and `PipelineResult.total_samples`
+- `examples/data`: real telemetry from NASA CYGNSS and ESA OPS-SAT, which the examples, the README and the tests now use in place of generated data
 - Documentation site under `docs/`, matching the `mkdocs.yml` navigation
 
 ### Planned
@@ -70,7 +76,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - `mdp run`: execute a pipeline from JSON config files with optional dry-run and max-batch limiting
 
 #### Examples
-- `examples/01_binary_ingest.py`: synthetic HK binary → decom → polynomial calibration → Parquet
+- `examples/01_binary_ingest.py`: binary packets → decom → polynomial calibration → Parquet
 - `examples/02_csv_to_hdf5.py`: CSV telemetry → polynomial calibration → HDF5
 
 #### Infrastructure
