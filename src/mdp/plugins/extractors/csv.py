@@ -23,8 +23,9 @@ wrong width, and the other way round.
 A row whose time is not a finite number is skipped and counted in ``skipped_rows``.
 
 A file that is empty, repeats a column name or breaks the CSV quoting fails the run.
-Quoting is read strictly, so an unclosed quote or a file cut off inside a quoted cell
-cannot swallow the rows after it.
+Quoting is read strictly, so a quote that is never closed or a file cut off inside a
+quoted cell fails. A stray quote closed by a later stray quote is valid CSV, reads as one
+multi-line cell, and cannot be told apart from the bytes alone.
 """
 
 from __future__ import annotations

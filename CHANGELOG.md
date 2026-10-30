@@ -18,7 +18,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - `time_tai` is empty for samples whose packet has no `source_time_tai`. It used to hold the sequence count
 - `to_wide_dataframe()` raises if a parameter has no sample time, or several samples at one time, instead of dropping samples
 - `CsvLoaderConfig.float_format` defaults to `%.17g`, which keeps small values
-- The CSV extractor reads quoting strictly, so an unclosed quote or a file cut off inside a quoted cell fails the run with the line it began on, instead of swallowing the rows after it
+- The CSV extractor reads quoting strictly, so an unclosed quote or a file cut off inside a quoted cell fails the run with the line it began on. A stray quote closed by a later one is valid CSV and still reads as one cell
+- An identity calibration keeps the value exactly, so 64-bit integers and text pass through it unchanged
 - A repeated CSV column name fails the run. It used to lose a column without saying so
 - An empty CSV fails the run, and so does an empty file with `frame_sync`, as a file with no marker does
 - A parameter in HDF5 holds one kind of value, whatever the batch size. Numbers, text and booleans in one parameter fail the run, also when text came first. Floats after integers rewrite the column to float64 instead of failing

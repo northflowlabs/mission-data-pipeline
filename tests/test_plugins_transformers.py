@@ -215,6 +215,19 @@ class TestCalibrationTransformer:
         result = transformer.transform(ds)
         assert float(result.get_parameter("x").samples[0].eng_value) == 42.0  # type: ignore[union-attr]
 
+    @pytest.mark.parametrize("value", [2**53 + 1, "007"])
+    def test_identity_keeps_the_exact_value(self, value: int | str) -> None:
+        ds = _dataset_with_param("x", [0.0])
+        record = ds.get_parameter("x")
+        sample = record.samples[0].model_copy(update={"raw_value": value, "eng_value": value})  # type: ignore[union-attr]
+        object.__setattr__(record, "samples", [sample])
+        cal = CalibrationEntry(parameter_name="x", method=CalibrationMethod.IDENTITY)
+        transformer = CalibrationTransformer(CalibrationConfig(calibrations=[cal]))
+        transformer.setup()
+        result = transformer.transform(ds).get_parameter("x").samples[0]  # type: ignore[union-attr]
+        assert result.eng_value == value
+        assert result.calibration_id == "identity"
+
     def test_uncalibrated_param_untouched(self) -> None:
         ds = _dataset_with_param("uncalibrated", [99.0])
         cfg = CalibrationConfig(calibrations=[])

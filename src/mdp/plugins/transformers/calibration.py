@@ -114,6 +114,14 @@ class CalibrationTransformer(Transformer[CalibrationConfig]):
 
             calibrated: list[EngineeringParameter] = []
             for sample in record.samples:
+                if cal.method == CalibrationMethod.IDENTITY:
+                    value = sample.raw_value if sample.eng_value is None else sample.eng_value
+                    calibrated.append(
+                        sample.model_copy(
+                            update={"eng_value": value, "calibration_id": cal.method.value}
+                        )
+                    )
+                    continue
                 try:
                     raw = float(sample.raw_value)  # type: ignore[arg-type]
                 except (TypeError, ValueError):
