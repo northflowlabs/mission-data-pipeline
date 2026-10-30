@@ -18,6 +18,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - `CsvLoaderConfig.float_format` defaults to `%.17g`, which keeps small values
 
 ### Fixed
+- `mdp` and console logging work on Windows from a plain install: `colorama` is a dependency there
 - `decom` reads integer and boolean fields at any bit position, with the new `bit_offset`, and sign-extends signed fields of any length
 - `TelemetryDataset.merge()` leaves both inputs unchanged
 - `batch.loaded` no longer fires after a failed load, and a failed batch is not counted

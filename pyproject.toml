@@ -37,6 +37,7 @@ dependencies = [
     "click>=8.1",
     "structlog>=24.1",
     "typing-extensions>=4.9",
+    "colorama>=0.4; sys_platform == 'win32'",
 ]
 
 [project.optional-dependencies]
