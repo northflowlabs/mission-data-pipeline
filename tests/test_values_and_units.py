@@ -180,12 +180,6 @@ class TestUnits:
         with pytest.raises(ValueError, match="mixes units"):
             a.merge(b)
 
-    def test_merge_keeps_a_known_unit(self) -> None:
-        a, b = TelemetryDataset(), TelemetryDataset()
-        a.add_parameter(_sample(1.0))
-        b.add_parameter(_sample(2.0, unit="K"))
-        assert a.merge(b).parameters["x"].unit == "K"
-
     def test_wide_parquet_carries_units_across_batches(self, tmp_path: Path) -> None:
         batches = [
             [_sample(1.0, time=1.0, unit="K")],

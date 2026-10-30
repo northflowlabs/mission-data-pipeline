@@ -21,9 +21,19 @@ from mdp.observability.metrics import PipelineMetrics
 
 log = structlog.get_logger(__name__)
 
-# Dataset metadata counters that mean data was lost: skipped_frames from the binary
-# extractor, short_packets from decom, skipped_rows and empty_cells from the CSV extractor.
-_DATA_ISSUES = ("skipped_frames", "short_packets", "skipped_rows", "empty_cells")
+# Dataset metadata counters that mean data was lost: skipped_frames and lead_in_bytes
+# from the binary extractor, short_packets from decom, and wrong_width_rows, skipped_rows
+# and empty_cells from the CSV extractor.
+_DATA_ISSUES = (
+    "skipped_frames",
+    "lead_in_bytes",
+    "short_packets",
+    "wrong_width_rows",
+    "skipped_rows",
+    "empty_cells",
+)
+# Counters that describe the stream but lose nothing: padding and idle packets
+_STREAM_NOTES = ("fill_bytes", "idle_packets")
 
 
 @dataclass
@@ -53,6 +63,7 @@ class PipelineResult:
     total_packets: int
     total_samples: int = 0
     data_issues: dict[str, int] = field(default_factory=dict)
+    stream_notes: dict[str, int] = field(default_factory=dict)
     stage_results: list[StageResult] = field(default_factory=list)
     errors: list[Exception] = field(default_factory=list)
 
@@ -69,6 +80,7 @@ class PipelineResult:
             f"  samples   : {self.total_samples}",
         ]
         lines += [f"  {name} : {count}" for name, count in self.data_issues.items()]
+        lines += [f"  {name} : {count}" for name, count in self.stream_notes.items()]
         if self.errors:
             lines.append(f"  errors    : {len(self.errors)}")
         for r in self.stage_results:
@@ -131,6 +143,7 @@ class Pipeline:
         total_packets = 0
         total_samples = 0
         data_issues: dict[str, int] = {}
+        stream_notes: dict[str, int] = {}
 
         log.info(
             "pipeline.start",
@@ -160,10 +173,11 @@ class Pipeline:
                 errors.extend(t_errors)
                 for t_result in t_results:
                     self._record_stage(t_result)
-                for issue in _DATA_ISSUES:
-                    count = dataset.metadata.get(issue)
-                    if isinstance(count, int) and count:
-                        data_issues[issue] = data_issues.get(issue, 0) + count
+                for names, totals in ((_DATA_ISSUES, data_issues), (_STREAM_NOTES, stream_notes)):
+                    for name in names:
+                        count = dataset.metadata.get(name)
+                        if isinstance(count, int) and count:
+                            totals[name] = totals.get(name, 0) + count
                 if not t_errors:
                     self.hooks.fire("batch.transformed", dataset)
 
@@ -221,6 +235,7 @@ class Pipeline:
             total_packets=total_packets,
             total_samples=total_samples,
             data_issues=data_issues,
+            stream_notes=stream_notes,
             stage_results=all_stage_results,
             errors=errors,
         )

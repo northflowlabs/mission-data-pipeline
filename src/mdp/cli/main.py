@@ -92,7 +92,13 @@ def stages() -> None:
 
 @cli.command()
 @click.argument("file", type=click.Path(exists=True, path_type=Path))
-@click.option("--max-packets", default=20, show_default=True, help="Max packets to display.")
+@click.option(
+    "--max-packets",
+    default=20,
+    show_default=True,
+    type=click.IntRange(min=1),
+    help="Max packets to display.",
+)
 @click.option(
     "--apid",
     multiple=True,

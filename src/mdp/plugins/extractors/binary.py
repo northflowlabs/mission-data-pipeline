@@ -12,15 +12,27 @@ stream of CCSDS Space Packets (no framing).  Each packet starts with a
 6-byte primary header followed by ``header.packet_data_length`` bytes.
 
 A stream that stops making sense is an error, not the end of the data: an invalid
-header or a truncated packet raises ``ValueError`` with its byte offset. With
-``frame_sync`` the extractor can recover, so it moves on to the next sync marker and
-counts the frame in the batch's ``skipped_frames`` metadata. A frame may hold several
-packets: they are read until the next marker or the end of the file.
+header or a truncated packet raises ``ValueError`` with its byte offset.
+
+With ``frame_sync`` a frame runs from one marker to the next, and may hold several
+packets. The extractor can recover from damage, so it moves on to the next marker and
+counts the frame in ``skipped_frames``. The rules:
+
+- Bytes before the first marker count in ``lead_in_bytes``. A file with no marker fails.
+- A packet's length comes from its header. The bytes 0x1ACFFC1D can occur in a payload,
+  so a marker inside a packet is only accepted as payload when the packet ends exactly
+  at another marker or at the end of the file. Otherwise the length is taken to be
+  wrong, and the frame is skipped. A payload marker in a packet followed by another
+  packet of the same frame is therefore counted as a skipped frame: that is the cost of
+  not reading past a real marker.
+- A rest of a frame that is all 0x00 or all 0xFF is fill: it counts in ``fill_bytes``.
+- Idle packets, APID 0x7FF, are dropped and counted in ``idle_packets``.
 """
 
 from __future__ import annotations
 
 import struct
+from collections import Counter
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Annotated
@@ -33,6 +45,7 @@ from mdp.models.dataset import TelemetryDataset
 from mdp.models.packet import CCSDSPrimaryHeader, TelemetryPacket
 
 SYNC_MARKER = b"\x1a\xcf\xfc\x1d"
+_IDLE_APID = 0x7FF
 CCSDS_HEADER_SIZE = 6
 
 
@@ -79,31 +92,49 @@ class BinaryPacketExtractor(Extractor[BinaryExtractorConfig]):
         sync = self.config.frame_sync
         dataset = self._new_dataset()
         count = 0
-        skipped_frames = 0
+        counters: Counter[str] = Counter()
 
         offset = 0
-        if sync:
+        if sync and data:
             first = data.find(SYNC_MARKER)
-            offset = first + len(SYNC_MARKER) if first >= 0 else len(data)
+            if first < 0:
+                raise ValueError(
+                    f"No sync marker 0x{SYNC_MARKER.hex().upper()} in the {len(data)} bytes "
+                    f"of {self.config.path}. Is frame_sync right for this file?"
+                )
+            counters["lead_in_bytes"] = first
+            offset = first + len(SYNC_MARKER)
 
         while offset < len(data):
-            if sync and data.startswith(SYNC_MARKER, offset):
-                offset += len(SYNC_MARKER)
-                continue
+            if sync:
+                if data.startswith(SYNC_MARKER, offset):
+                    offset += len(SYNC_MARKER)
+                    continue
+                next_sync = data.find(SYNC_MARKER, offset + 1)
+                frame_end = next_sync if next_sync >= 0 else len(data)
+                rest = data[offset:frame_end]
+                if not rest.strip(b"\x00") or not rest.strip(b"\xff"):
+                    counters["fill_bytes"] += len(rest)
+                    offset = frame_end
+                    continue
 
             try:
                 packet_bytes, header = self._read_packet(data, offset)
+                end = offset + len(packet_bytes)
+                if sync and end > frame_end + len(SYNC_MARKER) - 1:
+                    self._require_clean_end(data, offset, end)
             except ValueError:
                 if not sync:
                     raise
-                skipped_frames += 1
-                next_sync = data.find(SYNC_MARKER, offset + 1)
-                if next_sync < 0:
-                    break
-                offset = next_sync + len(SYNC_MARKER)
+                counters["skipped_frames"] += 1
+                offset = frame_end
                 continue
 
-            offset += len(packet_bytes)
+            offset = end
+
+            if header.apid == _IDLE_APID and sync:
+                counters["idle_packets"] += 1
+                continue
 
             if self.config.apid_filter and header.apid not in self.config.apid_filter:
                 continue
@@ -118,15 +149,21 @@ class BinaryPacketExtractor(Extractor[BinaryExtractorConfig]):
             count += 1
 
             if count >= self.config.batch_size:
-                dataset.metadata["skipped_frames"] = skipped_frames
+                dataset.metadata.update(counters)
                 yield dataset
                 dataset = self._new_dataset()
                 count = 0
-                skipped_frames = 0
+                counters.clear()
 
-        if dataset.packets or skipped_frames:
-            dataset.metadata["skipped_frames"] = skipped_frames
+        if dataset.packets or any(counters.values()):
+            dataset.metadata.update(counters)
             yield dataset
+
+    @staticmethod
+    def _require_clean_end(data: bytes, offset: int, end: int) -> None:
+        """A packet that crosses a marker must end at another marker or the end of file."""
+        if end != len(data) and not data.startswith(SYNC_MARKER, end):
+            raise ValueError(f"The packet at byte {offset} crosses a sync marker")
 
     def _read_packet(self, data: bytes, offset: int) -> tuple[bytes, CCSDSPrimaryHeader]:
         header_bytes = data[offset : offset + CCSDS_HEADER_SIZE]

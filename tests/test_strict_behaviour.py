@@ -110,7 +110,8 @@ class TestCsvValues:
 
     def test_a_short_row_is_counted(self, tmp_path: Path) -> None:
         ds = self._read(tmp_path, "time,apid,seq_count,x\n1.0,1,0,5\n,,,\n2.0,1\n")
-        assert ds.metadata["skipped_rows"] == 2
+        assert ds.metadata["skipped_rows"] == 1
+        assert ds.metadata["wrong_width_rows"] == 1
         assert ds.parameters["x"].count == 1
 
     def test_an_empty_cell_is_counted(self, tmp_path: Path) -> None:

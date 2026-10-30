@@ -12,16 +12,21 @@ as commonly produced by ground segment SCICON or MCS tools.
 Cells are read as text and converted by ``parameter_types``, so an integer keeps every
 digit and "007" stays what it is. Without a declared type, a cell written as a plain
 integer or a number becomes one, and anything else, such as "007", stays text.
+
+A row must have as many cells as the header. A row of another width is never shifted
+or padded: it is skipped and counted in ``wrong_width_rows``. A trailing delimiter is
+ignored when it appears on the header and on the row, and a file whose rows all end in
+one, under a header that does not, is read the same way.
 """
 
 from __future__ import annotations
 
+import csv
 import re
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Annotated
 
-import pandas as pd
 from pydantic import BaseModel, Field
 
 from mdp.core.base import Extractor
@@ -30,7 +35,7 @@ from mdp.models.dataset import TelemetryDataset
 from mdp.models.parameter import EngineeringParameter, ParameterType
 
 _PLAIN_INTEGER = re.compile(r"-?(0|[1-9][0-9]*)")
-_PLAIN_NUMBER = re.compile(r"-?(0|[1-9][0-9]*)?(\.[0-9]+)?([eE][+-]?[0-9]+)?")
+_PLAIN_NUMBER = re.compile(r"-?((0|[1-9][0-9]*)(\.[0-9]*)?|\.[0-9]+)([eE][+-]?[0-9]+)?")
 _TRUE = {"1", "true"}
 _FALSE = {"0", "false"}
 
@@ -65,37 +70,61 @@ class CsvTelemetryExtractor(Extractor[CsvExtractorConfig]):
         if not path.exists():
             raise FileNotFoundError(f"CSV file not found: {path}")
 
-        reader = pd.read_csv(
-            path,
-            sep=self.config.delimiter,
-            chunksize=self.config.batch_size,
-            dtype=str,
-            keep_default_na=False,
-        )
+        with open(path, encoding="utf-8-sig", newline="") as fh:
+            reader = csv.reader(fh, delimiter=self.config.delimiter)
+            header = next(reader, None)
+            if header is None:
+                return
+            if header and not header[-1].strip():
+                header = header[:-1]
+            self._check_columns(header)
 
-        for chunk in reader:
-            yield self._chunk_to_dataset(chunk)
+            batch: list[list[str]] = []
+            for row in reader:
+                if not row:
+                    continue
+                batch.append(row)
+                if len(batch) >= self.config.batch_size:
+                    yield self._batch_to_dataset(header, batch)
+                    batch = []
+            if batch:
+                yield self._batch_to_dataset(header, batch)
 
-    def _chunk_to_dataset(self, chunk: pd.DataFrame) -> TelemetryDataset:
+    def _check_columns(self, header: list[str]) -> None:
         cfg = self.config
-        required = {cfg.time_column, cfg.apid_column, cfg.seq_count_column}
-        missing = required - set(chunk.columns)
+        missing = {cfg.time_column, cfg.apid_column, cfg.seq_count_column} - set(header)
         if missing:
             raise ValueError(f"CSV is missing required columns: {missing}")
+        unknown = set(cfg.parameter_columns or []) - set(header)
+        if unknown:
+            raise ValueError(f"CSV has no parameter columns: {unknown}")
 
-        param_cols = cfg.parameter_columns or [c for c in chunk.columns if c not in required]
+    def _batch_to_dataset(self, header: list[str], batch: list[list[str]]) -> TelemetryDataset:
+        cfg = self.config
+        required = {cfg.time_column, cfg.apid_column, cfg.seq_count_column}
+        param_cols = cfg.parameter_columns or [c for c in header if c not in required]
 
         dataset = TelemetryDataset(
             metadata={
                 "source": str(cfg.path),
                 "extractor": "csv",
-                "rows": len(chunk),
+                "rows": len(batch),
             }
         )
+        if cfg.source_id is not None:
+            dataset.metadata["source_id"] = cfg.source_id
 
+        wrong_width_rows = 0
         skipped_rows = 0
         empty_cells = 0
-        for row in chunk.to_dict("records"):
+        for cells in batch:
+            if len(cells) == len(header) + 1 and not cells[-1].strip():
+                cells = cells[:-1]
+            if len(cells) != len(header):
+                wrong_width_rows += 1
+                continue
+            row = dict(zip(header, cells, strict=True))
+
             try:
                 tai = float(row[cfg.time_column])
                 apid = int(row[cfg.apid_column])
@@ -120,6 +149,7 @@ class CsvTelemetryExtractor(Extractor[CsvExtractorConfig]):
                 )
                 dataset.add_parameter(param)
 
+        dataset.metadata["wrong_width_rows"] = wrong_width_rows
         dataset.metadata["skipped_rows"] = skipped_rows
         dataset.metadata["empty_cells"] = empty_cells
         return dataset

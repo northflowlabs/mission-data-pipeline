@@ -42,7 +42,8 @@ def new_wide_times(wide: pd.DataFrame, seen: dict[str, set[float]]) -> None:
 
 
 def _check_units(name: str, first: str | None, second: str | None) -> None:
-    if first and second and first != second:
+    # No unit is not a wildcard: an unlabelled value may not be in the other unit
+    if first != second:
         raise ValueError(f"Parameter '{name}' mixes units: {first} and {second}")
 
 
@@ -179,7 +180,7 @@ class TelemetryDataset:
                 samples = existing.samples + record.samples if existing else record.samples
                 merged.parameters[name] = ParameterRecord(
                     name=name,
-                    unit=(existing.unit or record.unit) if existing else record.unit,
+                    unit=record.unit,
                     samples=list(samples),
                 )
         return merged

@@ -104,7 +104,7 @@ class HDF5Loader(Loader[HDF5LoaderConfig]):
         grp = root.require_group(name)
 
         stored_unit = grp.attrs.get("unit")
-        if unit and stored_unit and stored_unit != unit:
+        if "time_tai" in grp and stored_unit != unit:
             raise ValueError(f"Parameter '{name}' mixes units: {stored_unit} and {unit}")
 
         # Every column of a parameter must stay the same length, so the value column
