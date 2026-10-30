@@ -22,7 +22,7 @@ Built-in stages register themselves by name in `mdp.core.registry.registry` when
 
 ### Transformers
 
-- `decom` extracts parameters from packet user data. Each `ParameterDefinition` gives `name`, `apid`, `byte_offset`, `bit_length`, `param_type`, and optionally `unit`, `little_endian` and `description`.
+- `decom` extracts parameters from packet user data. Each `ParameterDefinition` gives `name`, `apid`, `byte_offset`, `bit_length`, `param_type`, and optionally `bit_offset`, `unit`, `little_endian` and `description`. `bit_offset` (0 to 7, from the most significant bit) places integer and boolean fields at any bit; floats and little-endian fields must be byte-aligned.
 - `apid_filter` keeps the APIDs in `include` or drops the APIDs in `exclude`. Set one, not both.
 - `calibration` converts raw values to engineering units. Each `CalibrationEntry` uses `CalibrationMethod.POLYNOMIAL` with `coefficients`, `CalibrationMethod.TABLE` with `table_raw` and `table_eng`, or `CalibrationMethod.IDENTITY`.
 

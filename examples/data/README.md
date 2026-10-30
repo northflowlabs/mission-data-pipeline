@@ -8,7 +8,7 @@ The first 101 CCSDS Space Packets of a Level 0 file from the NASA CYGNSS F7 sate
 
 The packets of APID 1313 carry the GPS week and GPS seconds as little-endian fields at user data offsets 4 and 6. Each value agrees with the UTC time in the same packet's secondary header. The example decodes those two fields only, because the rest of this packet's layout is not published with the data.
 
-CCSDSPy is Copyright (c) 2018, Daniel da Silva, under the BSD 3-Clause licence. Its full text is at <https://github.com/ddasilva/ccsdspy/blob/main/LICENSE.rst>.
+CCSDSPy is Copyright (c) 2018, Daniel da Silva, under the BSD 3-Clause licence, reproduced in [LICENSE-CCSDSPy.rst](LICENSE-CCSDSPy.rst).
 
 ## opssat_ad_excerpt.csv
 

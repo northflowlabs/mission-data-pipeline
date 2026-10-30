@@ -9,7 +9,19 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Changed
+- `HDF5LoaderConfig.mode` defaults to `"w"`: a rerun replaces the file, as with Parquet and CSV. `"a"` keeps earlier runs
+- `BinaryPacketExtractor` raises `ValueError` on an invalid header or a truncated packet. It used to stop or skip without saying so. With `frame_sync` it moves on and counts `skipped_frames`
+- CCSDS headers with a version other than 0 are rejected
+- `time_tai` is empty for samples whose packet has no `source_time_tai`. It used to hold the sequence count
+- `to_wide_dataframe()` raises if a parameter has no sample time, or several samples at one time, instead of dropping samples
+- `CsvLoaderConfig.float_format` defaults to `%.17g`, which keeps small values
+
 ### Fixed
+- `decom` reads integer and boolean fields at any bit position, with the new `bit_offset`, and sign-extends signed fields of any length
+- `TelemetryDataset.merge()` leaves both inputs unchanged
+- `batch.loaded` no longer fires after a failed load, and a failed batch is not counted
+- HDF5 parameters keep their columns the same length when a batch changes value type
 - Parquet, CSV and HDF5 loaders keep every batch of a run. Each batch used to overwrite the last with the default settings, so only the final batch survived
 - `Pipeline` fires the hooks the documentation describes; pass a `HookManager` as `hooks`
 - `mdp run` exits with status 1 when a run gives the loader nothing to write, instead of reporting success with no output

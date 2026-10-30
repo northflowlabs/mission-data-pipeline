@@ -205,7 +205,7 @@ src/mdp/
 │   │   └── calibration.py  # Polynomial and table-lookup calibration
 │   └── loaders/
 │       ├── parquet.py   # Apache Parquet (pyarrow, Snappy), per-parameter or wide
-│       ├── hdf5.py      # HDF5 (gzip, append-safe, xarray-compatible layout)
+│       ├── hdf5.py      # HDF5 (gzip, xarray-compatible layout)
 │       └── csv.py       # CSV, per-parameter or wide-format
 │
 └── cli/
@@ -235,7 +235,7 @@ Implements the 6-byte CCSDS Space Packet primary header per **CCSDS 133.0-B-2, S
 | 14 | `seq_count` | 0 to 16383 (wraps) |
 | 16 | `data_length` | data field length − 1 |
 
-Supports `from_bytes()` / `to_bytes()` round-trip with full validation.
+Supports `from_bytes()` / `to_bytes()` round-trip. `from_bytes()` rejects a header whose version is not 0, and `BinaryPacketExtractor` raises on an invalid header or a truncated packet instead of stopping quietly.
 
 ### `TelemetryPacket`
 
@@ -250,7 +250,7 @@ Supports `from_bytes()` / `to_bytes()` round-trip with full validation.
 
 `from_bytes(raw, sec_hdr_length=N)` accepts a mission-specific secondary header length rather than assuming a fixed value.
 
-MDP does not decode secondary headers, because their format is mission-specific. Set `source_time_tai` from yours in a transformer ahead of `decom`, as `examples/01_binary_ingest.py` does; without it, the `time_tai` of decommutated samples holds the sequence count as an ordering key.
+MDP does not decode secondary headers, because their format is mission-specific. Set `source_time_tai` from yours in a transformer ahead of `decom`, as `examples/01_binary_ingest.py` does. Without it, `time_tai` in the output is empty and `seq_count` gives the order, as in the pipeline above.
 
 ### `TelemetryDataset`
 
@@ -345,7 +345,7 @@ pytest -v --cov=mdp --cov-report=term-missing
 pytest tests/test_models_packet.py -v
 ```
 
-Current coverage: **90% overall**.
+Current coverage: **91% overall**.
 
 ## Roadmap
 
